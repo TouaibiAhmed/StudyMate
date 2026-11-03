@@ -15,6 +15,26 @@ export type CourseSummary = {
   icon: string
 }
 
+export type CourseConcept = {
+  id: string
+  title: string
+  progress: number
+  status: 'Strong' | 'In progress' | 'Needs review'
+}
+
+export type CourseStudySession = {
+  id: string
+  title: string
+  date: string
+  duration: string
+  score?: string
+}
+
+export type CourseDetail = CourseSummary & {
+  concepts: CourseConcept[]
+  sessions: CourseStudySession[]
+}
+
 export type CreateCourseInput = {
   title: string
   subject: CourseSubject
@@ -25,4 +45,5 @@ export type CreateCourseInput = {
 export interface CourseService {
   listCourses(): Promise<CourseSummary[]>
   createCourse(input: CreateCourseInput): Promise<CourseSummary>
+  getCourse(courseId: string): Promise<CourseDetail | undefined>
 }

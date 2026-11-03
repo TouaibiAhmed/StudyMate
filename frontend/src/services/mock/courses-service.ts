@@ -1,4 +1,4 @@
-import type { CourseService, CourseSummary } from '../contracts/courses'
+import type { CourseDetail, CourseService, CourseSummary } from '../contracts/courses'
 
 let nextCourseNumber = 1
 
@@ -57,6 +57,32 @@ const mockCourses: CourseSummary[] = [
   },
 ]
 
+const courseDetails: Record<string, Pick<CourseDetail, 'concepts' | 'sessions'>> = {
+  'deep-learning': {
+    concepts: [
+      { id: 'gradient-descent', title: 'Gradient descent', progress: 82, status: 'Strong' },
+      { id: 'backpropagation', title: 'Backpropagation', progress: 56, status: 'In progress' },
+      { id: 'regularization', title: 'Regularization', progress: 31, status: 'Needs review' },
+      { id: 'cnn-architecture', title: 'CNN architecture', progress: 18, status: 'Needs review' },
+    ],
+    sessions: [
+      { id: 'deep-session-1', title: 'Loss functions and intuition', date: 'Today, 9:20 AM', duration: '36 min', score: '90%' },
+      { id: 'deep-session-2', title: 'Neural network foundations', date: 'Tuesday, 3:10 PM', duration: '42 min', score: '84%' },
+      { id: 'deep-session-3', title: 'Tensor shapes practice', date: '10 November', duration: '24 min' },
+    ],
+  },
+  statistics: {
+    concepts: [
+      { id: 'distributions', title: 'Probability distributions', progress: 74, status: 'Strong' },
+      { id: 'hypothesis-testing', title: 'Hypothesis testing', progress: 47, status: 'In progress' },
+      { id: 'confidence-intervals', title: 'Confidence intervals', progress: 26, status: 'Needs review' },
+    ],
+    sessions: [
+      { id: 'statistics-session-1', title: 'Choosing the right test', date: 'Yesterday, 4:45 PM', duration: '31 min', score: '88%' },
+    ],
+  },
+}
+
 export const mockCourseService: CourseService = {
   async listCourses() {
     return mockCourses.map((course) => ({ ...course }))
@@ -77,5 +103,11 @@ export const mockCourseService: CourseService = {
     }
     mockCourses.unshift(course)
     return { ...course }
+  },
+  async getCourse(courseId) {
+    const course = mockCourses.find((item) => item.id === courseId)
+    if (!course) return undefined
+    const detail = courseDetails[courseId] ?? { concepts: [], sessions: [] }
+    return { ...course, concepts: detail.concepts, sessions: detail.sessions }
   },
 }

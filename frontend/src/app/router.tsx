@@ -8,6 +8,7 @@ import { RoadmapsPage } from '../pages/RoadmapsPage'
 import { ExamsPage } from '../pages/ExamsPage'
 import { ProfilePage } from '../pages/ProfilePage'
 import { PlaceholderPage } from '../pages/PlaceholderPage'
+import { CourseDetailPage } from '../pages/CourseDetailPage'
 
 export const router = createBrowserRouter([
   {
@@ -16,7 +17,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'courses', element: <CoursesPage /> },
-      { path: 'courses/:courseId', element: <PlaceholderPage eyebrow="Course workspace" title="Course overview" description="Your course lessons, notes, and next steps will appear here." /> },
+      { path: 'courses/:courseId', element: <CourseDetailPage /> },
       { path: 'study/:sessionId', element: <StudySessionPage /> },
       { path: 'progress', element: <ProgressPage /> },
       { path: 'roadmaps', element: <RoadmapsPage /> },
