@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap');
+
+:root {
+  --ink: #1d3029;
+  --forest: #173c32;
+  --forest-soft: #e8f0ea;
+  --paper: #f7f3eb;
+  --paper-deep: #eee8dc;
+  --surface: #fffdf8;
+  --muted: #6e766e;
+  --subtle: #9da39b;
+  --line: #dedfd5;
+  --coral: #d96552;
+  --coral-soft: #f9e6df;
+  --sage: #8da78f;
+  --sage-soft: #e4eee5;
+  --lilac: #a69bc4;
+  --lilac-soft: #eeeaf5;
+  --focus: #315fce;
+  --shadow-sm: 0 2px 8px rgba(29, 48, 41, .05);
+  --shadow-md: 0 10px 24px rgba(29, 48, 41, .07);
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'DM Sans', 'Segoe UI', sans-serif;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.25rem;
+  --text-xl: clamp(1.7rem, 3vw, 2.45rem);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --ease-standard: cubic-bezier(.2, .8, .2, 1);
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
