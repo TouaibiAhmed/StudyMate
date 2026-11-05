@@ -8,6 +8,31 @@ export type RoadmapTopic = {
   completed: boolean
 }
 
+export type RoadmapTopicStatus = 'Not started' | 'In progress' | 'Completed' | 'Known'
+
+export type RoadmapGraphTopic = {
+  id: string
+  title: string
+  description: string
+  optional: boolean
+  status: RoadmapTopicStatus
+  progress: number
+  prerequisites: string[]
+  resources: string[]
+  position: { x: number; y: number }
+}
+
+export type RoadmapGraphEdge = {
+  id: string
+  source: string
+  target: string
+}
+
+export type RoadmapGraphData = {
+  topics: RoadmapGraphTopic[]
+  edges: RoadmapGraphEdge[]
+}
+
 export type RoadmapSummary = {
   id: string
   role: string
