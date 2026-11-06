@@ -9,6 +9,8 @@ import { mockExamService } from './mock/exams-service'
 import { mockPreferencesService } from './mock/preferences-service'
 import { mockLearningRecordService } from './mock/learning-records'
 import { mockAuthService } from './mock/mock-auth.service'
+import { mockChatService } from './mock/chat-service'
+import { mockStudyToolsService } from './mock/study-tools-service'
 export const studyService = mockStudyService
 export const dashboardService = mockDashboardService
 export const courseService = mockCourseService
@@ -20,3 +22,5 @@ export const examService = mockExamService
 export const preferencesService = mockPreferencesService
 export const learningRecordService = mockLearningRecordService
 export const authService = mockAuthService
+export const chatService = mockChatService
+export const studyToolsService = mockStudyToolsService

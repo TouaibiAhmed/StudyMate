@@ -3,6 +3,7 @@ import type { LoginInput, SignupInput, User } from '../../features/auth/types/au
 import { mockUsers, type MockUser } from './mock-users'
 
 const sessionKey = 'studymate:mock-auth-user'
+const userProfileKey = 'studymate:mock-auth-profile'
 let nextUserNumber = 1
 
 function toUser(user: MockUser): User {
@@ -14,12 +15,18 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
 
+function persistSafeUser(user: User) {
+  localStorage.setItem(userProfileKey, JSON.stringify(user))
+}
+
 export const mockAuthService: AuthService = {
   async login(input: LoginInput) {
     const user = mockUsers.find((candidate) => candidate.email === normalizeEmail(input.email) && candidate.password === input.password)
     if (!user) throw new Error('The email or password did not match our demo account.')
     localStorage.setItem(sessionKey, user.id)
-    return toUser(user)
+    const safeUser = toUser(user)
+    persistSafeUser(safeUser)
+    return safeUser
   },
 
   async signup(input: SignupInput) {
@@ -47,16 +54,26 @@ export const mockAuthService: AuthService = {
       preferredLanguage: input.preferredLanguage?.trim() || 'English',
       targetRole: input.targetRole?.trim() || undefined,
     }))
-    return toUser(user)
+    const safeUser = toUser(user)
+    persistSafeUser(safeUser)
+    return safeUser
   },
 
   async logout() {
     localStorage.removeItem(sessionKey)
+    localStorage.removeItem(userProfileKey)
   },
 
   async getCurrentUser() {
     const userId = localStorage.getItem(sessionKey)
     const user = userId ? mockUsers.find((candidate) => candidate.id === userId) : undefined
-    return user ? toUser(user) : undefined
+    if (user) return toUser(user)
+    try {
+      const persisted = localStorage.getItem(userProfileKey)
+      const safeUser = persisted ? JSON.parse(persisted) as User : undefined
+      return safeUser?.id === userId ? safeUser : undefined
+    } catch {
+      return undefined
+    }
   },
 }

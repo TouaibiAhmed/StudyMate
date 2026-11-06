@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Check, ChevronDown, Compass, Home, Map, Menu, Search, Settings, Sparkles, UserRound, X } from 'lucide-react'
+import { Bell, BookOpen, Check, ChevronDown, Compass, Home, Map, Menu, MessageCircle, Search, Settings, Sparkles, UserRound, X } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -12,6 +12,7 @@ const navigation = [
   { label: 'Study Progress', path: '/progress', icon: Compass },
   { label: 'Learning Roadmaps', path: '/roadmaps', icon: Map },
   { label: 'Practice Exams', path: '/exams', icon: Check },
+  { label: 'AI Studio', path: '/chat', icon: MessageCircle },
 ]
 
 const pageContexts = [
@@ -21,25 +22,28 @@ const pageContexts = [
   { match: (path: string) => path.startsWith('/progress'), label: 'Study Progress' },
   { match: (path: string) => path.startsWith('/roadmaps'), label: 'Learning Roadmaps' },
   { match: (path: string) => path.startsWith('/exams'), label: 'Practice Exams' },
+  { match: (path: string) => path.startsWith('/chat'), label: 'AI Studio' },
   { match: (path: string) => path.startsWith('/profile'), label: 'Profile' },
   { match: (path: string) => path.startsWith('/settings'), label: 'Settings' },
 ]
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState<'sidebar' | 'topbar' | null>(null)
   const [profile, setProfile] = useState<StudentProfile>()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const profileRef = useRef<HTMLDivElement>(null)
+  const sidebarProfileRef = useRef<HTMLDivElement>(null)
   const current = pageContexts.find(({ match }) => match(location.pathname))?.label ?? 'Study Partner'
 
   useEffect(() => {
     void preferencesService.getProfile().then(setProfile)
     function refreshProfile() { void preferencesService.getProfile().then(setProfile) }
     function closeProfile(event: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) setProfileOpen(false)
+      const target = event.target as Node
+      if (!profileRef.current?.contains(target) && !sidebarProfileRef.current?.contains(target)) setProfileOpen(null)
     }
     document.addEventListener('mousedown', closeProfile)
     window.addEventListener('studymate:profile-updated', refreshProfile)
@@ -53,7 +57,7 @@ export function AppShell() {
     function closeMobileNavigation(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setMobileOpen(false)
-        setProfileOpen(false)
+        setProfileOpen(null)
       }
     }
     window.addEventListener('keydown', closeMobileNavigation)
@@ -69,7 +73,7 @@ export function AppShell() {
 
   function closeMenus() {
     setMobileOpen(false)
-    setProfileOpen(false)
+    setProfileOpen(null)
   }
 
   async function handleLogout() {
@@ -94,9 +98,12 @@ export function AppShell() {
         <div className="sidebar-label">Account</div>
         <NavLink to="/profile" onClick={closeMenus} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}><UserRound size={18} /><span>Profile</span></NavLink>
         <NavLink to="/settings" onClick={closeMenus} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}><Settings size={18} /><span>Settings</span></NavLink>
-        <button className="sidebar-user" onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen}>
-          <div className="avatar avatar-small">{user?.name.slice(0, 2).toUpperCase() ?? 'AM'}</div><div><strong>{user?.name ?? 'Student'}</strong><small>{profile?.fieldOfStudy ?? 'Student account'}</small></div><ChevronDown size={15} />
-        </button>
+        <div className="sidebar-profile" ref={sidebarProfileRef}>
+          <button className="sidebar-user" onClick={() => setProfileOpen((open) => open === 'sidebar' ? null : 'sidebar')} aria-expanded={profileOpen === 'sidebar'} aria-haspopup="menu" aria-controls="sidebar-account-menu">
+            <div className="avatar avatar-small">{user?.name.slice(0, 2).toUpperCase() ?? 'AM'}</div><div><strong>{user?.name ?? 'Student'}</strong><small>{profile?.specialization ?? profile?.fieldOfStudy ?? 'Student account'}</small></div><ChevronDown size={15} />
+          </button>
+          {profileOpen === 'sidebar' && <AccountMenu id="sidebar-account-menu" user={user} profile={profile} onClose={closeMenus} onLogout={() => void handleLogout()} />}
+        </div>
       </aside>
       {mobileOpen && <button className="sidebar-overlay" aria-label="Close menu" onClick={() => setMobileOpen(false)} />}
       <main className="main-content">
@@ -107,10 +114,10 @@ export function AppShell() {
             <form className="topbar-search" onSubmit={handleSearchSubmit}><Search size={16} /><input name="query" aria-label="Search courses" placeholder="Search courses" /></form>
             <button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button>
             <div className="profile-menu" ref={profileRef}>
-              <button className="profile-trigger" onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-haspopup="menu">
+              <button className="profile-trigger" onClick={() => setProfileOpen((open) => open === 'topbar' ? null : 'topbar')} aria-expanded={profileOpen === 'topbar'} aria-haspopup="menu" aria-controls="topbar-account-menu">
                 <div className="avatar">{user?.name.slice(0, 2).toUpperCase() ?? 'AM'}</div><ChevronDown size={15} />
               </button>
-              {profileOpen && <div className="profile-dropdown" role="menu"><div className="profile-dropdown-heading"><strong>{user?.name ?? 'Student'}</strong><span>{user?.email}</span></div><NavLink to="/profile" onClick={closeMenus} role="menuitem"><UserRound size={15} /> Profile</NavLink><NavLink to="/settings" onClick={closeMenus} role="menuitem"><Settings size={15} /> Settings</NavLink><button role="menuitem" onClick={handleLogout}>Sign out</button><button role="menuitem" onClick={() => setProfileOpen(false)}><X size={15} /> Close menu</button></div>}
+              {profileOpen === 'topbar' && <AccountMenu id="topbar-account-menu" user={user} profile={profile} onClose={closeMenus} onLogout={() => void handleLogout()} />}
             </div>
           </div>
         </header>
@@ -118,4 +125,14 @@ export function AppShell() {
       </main>
     </div>
   )
+}
+
+function AccountMenu({ id, user, profile, onClose, onLogout }: { id: string; user?: { name: string; email: string }; profile?: StudentProfile; onClose: () => void; onLogout: () => void }) {
+  return <div id={id} className="profile-dropdown" role="menu">
+    <div className="profile-dropdown-heading"><strong>{user?.name ?? 'Student'}</strong><span>{user?.email}</span><small>{profile?.domain ?? 'Student account'}{profile?.specialization ? ` · ${profile.specialization}` : ''}</small></div>
+    <NavLink to="/profile" onClick={onClose} role="menuitem"><UserRound size={15} /> Profile</NavLink>
+    <NavLink to="/settings" onClick={onClose} role="menuitem"><Settings size={15} /> Settings</NavLink>
+    <button role="menuitem" onClick={onLogout}>Sign out</button>
+    <button role="menuitem" onClick={onClose}><X size={15} /> Close menu</button>
+  </div>
 }

@@ -13,6 +13,7 @@ export type CourseSummary = {
   materialCount: number
   color: 'forest' | 'coral' | 'sage' | 'lilac'
   icon: string
+  domain?: string
 }
 
 export type CourseConcept = {

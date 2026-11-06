@@ -9,5 +9,10 @@ export const mockUsers: MockUser[] = [
     email: 'alex@example.com',
     password: 'study123',
     fieldOfStudy: 'Computer science',
+    domain: 'Computer Science & IT',
+    specialization: 'AI',
+    level: "Bachelor's",
+    preferredLanguage: 'English',
+    targetRole: 'Machine learning engineer',
   },
 ]

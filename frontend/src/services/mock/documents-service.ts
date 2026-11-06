@@ -2,9 +2,10 @@ import type { DocumentService, StudyDocument } from '../contracts/documents'
 
 let nextDocumentNumber = 1
 const mockDocuments: StudyDocument[] = [
-  { id: 'document-deep-1', courseId: 'deep-learning', fileName: 'deep-learning-notes.pdf', sizeBytes: 2400000, status: 'Ready', addedAt: 'Added today' },
-  { id: 'document-deep-2', courseId: 'deep-learning', fileName: 'lecture-04-regularization.pdf', sizeBytes: 5800000, status: 'Processing', addedAt: 'Added yesterday' },
-  { id: 'document-deep-3', courseId: 'deep-learning', fileName: 'neural-networks-reading.pdf', sizeBytes: 1200000, status: 'Failed', addedAt: 'Added 10 November', error: 'This mock document needs to be retried.' },
+  { id: 'document-deep-platform', courseId: 'deep-learning', fileName: 'StudyMate neural networks primer.pdf', sizeBytes: 1800000, status: 'Ready', addedAt: 'Platform material', source: 'platform-material' },
+  { id: 'document-deep-1', courseId: 'deep-learning', fileName: 'deep-learning-notes.pdf', sizeBytes: 2400000, status: 'Ready', addedAt: 'Added today', source: 'student-uploaded' },
+  { id: 'document-deep-2', courseId: 'deep-learning', fileName: 'lecture-04-regularization.pdf', sizeBytes: 5800000, status: 'Processing', addedAt: 'Added yesterday', source: 'student-uploaded' },
+  { id: 'document-deep-3', courseId: 'deep-learning', fileName: 'neural-networks-reading.pdf', sizeBytes: 1200000, status: 'Failed', addedAt: 'Added 10 November', error: 'This mock document needs to be retried.', source: 'student-uploaded' },
 ]
 
 export const mockDocumentService: DocumentService = {
@@ -12,7 +13,7 @@ export const mockDocumentService: DocumentService = {
     return mockDocuments.filter((document) => document.courseId === courseId).map((document) => ({ ...document }))
   },
   async queueDocument(courseId, fileName, sizeBytes) {
-    const document: StudyDocument = { id: `document-${nextDocumentNumber++}`, courseId, fileName, sizeBytes, status: 'Queued', addedAt: 'Added just now' }
+    const document: StudyDocument = { id: `document-${nextDocumentNumber++}`, courseId, fileName, sizeBytes, status: 'Queued', addedAt: 'Added just now', source: 'student-uploaded' }
     mockDocuments.unshift(document)
     return { ...document }
   },

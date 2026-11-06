@@ -15,6 +15,7 @@ const mockCourses: CourseSummary[] = [
     materialCount: 25,
     color: 'forest',
     icon: '∿',
+    domain: 'Computer Science & IT',
   },
   {
     id: 'statistics',
@@ -28,6 +29,7 @@ const mockCourses: CourseSummary[] = [
     materialCount: 24,
     color: 'coral',
     icon: 'σ',
+    domain: 'Computer Science & IT',
   },
   {
     id: 'biology',
@@ -41,6 +43,7 @@ const mockCourses: CourseSummary[] = [
     materialCount: 18,
     color: 'sage',
     icon: '✣',
+    domain: 'Health & Medicine',
   },
   {
     id: 'business-fundamentals',
@@ -54,6 +57,7 @@ const mockCourses: CourseSummary[] = [
     materialCount: 20,
     color: 'lilac',
     icon: '↗',
+    domain: 'Business',
   },
 ]
 

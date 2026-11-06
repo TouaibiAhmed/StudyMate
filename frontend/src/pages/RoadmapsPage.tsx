@@ -6,6 +6,9 @@ import { EmptyState } from '../components/feedback/EmptyState'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { roadmapService } from '../services/api-client'
 import type { CreateRoadmapInput, RoadmapCategory, RoadmapSummary } from '../services/contracts/roadmaps'
+import { preferencesService } from '../services/api-client'
+import type { StudentProfile } from '../services/contracts/preferences'
+import { isRoadmapRelevant, prioritizeRoadmaps } from '../services/domain-personalization'
 
 const categories: Array<'All' | RoadmapCategory> = ['All', 'Data', 'Engineering', 'Machine learning', 'Business']
 
@@ -17,17 +20,20 @@ export function RoadmapsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
+  const [profile, setProfile] = useState<StudentProfile>()
+  const [recommendedOnly, setRecommendedOnly] = useState(false)
 
   function loadRoadmaps(showLoading = true) {
     if (showLoading) { setLoading(true); setError('') }
     void roadmapService.listRoadmaps().then((items) => { setRoadmaps(items); setLoading(false) }).catch(() => { setError('We could not load the roadmap library. Try again from here.'); setLoading(false) })
   }
-  useEffect(() => { let active = true; void roadmapService.listRoadmaps().then((items) => { if (active) { setRoadmaps(items); setLoading(false) } }).catch(() => { if (active) { setError('We could not load the roadmap library. Try again from here.'); setLoading(false) } }); return () => { active = false } }, [])
+  useEffect(() => { let active = true; void Promise.all([roadmapService.listRoadmaps(), preferencesService.getProfile()]).then(([items, currentProfile]) => { if (active) { setRoadmaps(items); setProfile(currentProfile); setRecommendedOnly(Boolean(currentProfile.domain)); setLoading(false) } }).catch(() => { if (active) { setError('We could not load the roadmap library. Try again from here.'); setLoading(false) } }); return () => { active = false } }, [])
 
-  const visible = useMemo(() => roadmaps.filter((roadmap) => {
+  const orderedRoadmaps = useMemo(() => prioritizeRoadmaps(roadmaps, profile), [roadmaps, profile])
+  const visible = useMemo(() => orderedRoadmaps.filter((roadmap) => {
     const matchesQuery = `${roadmap.role} ${roadmap.description} ${roadmap.category}`.toLowerCase().includes(query.trim().toLowerCase())
-    return matchesQuery && (category === 'All' || roadmap.category === category)
-  }), [category, query, roadmaps])
+    return matchesQuery && (category === 'All' || roadmap.category === category) && (!recommendedOnly || isRoadmapRelevant(roadmap, profile))
+  }), [category, query, orderedRoadmaps, recommendedOnly, profile])
 
   function createRoadmap(input: CreateRoadmapInput) {
     setActionError('')
@@ -40,7 +46,8 @@ export function RoadmapsPage() {
   return <div className="page-stack roadmaps-page">
     <div className="page-intro"><div><span className="eyebrow">Structured learning</span><h2>Learning roadmaps</h2><p>Choose a thoughtful starting point for the role you want to grow toward.</p></div><button className="button" onClick={() => setDialogOpen(true)}><Plus size={16} /> Request custom roadmap</button></div>
     <div className="roadmap-disclaimer"><Sparkles size={16} /><span>Roadmaps are learning suggestions, not official career requirements. Verify generated suggestions against current job descriptions and trusted sources.</span></div>
-    <section className="course-toolbar roadmap-toolbar" aria-label="Roadmap filters"><label className="search-box course-search"><Search size={17} /><input placeholder="Search roles" aria-label="Search roles" value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="subject-filters" role="group" aria-label="Filter by roadmap category">{categories.map((option) => <button key={option} className={category === option ? 'selected' : ''} onClick={() => setCategory(option)}>{option}</button>)}</div></section>
+    <section className="course-toolbar roadmap-toolbar" aria-label="Roadmap filters"><label className="search-box course-search"><Search size={17} /><input placeholder="Search roles" aria-label="Search roles" value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="subject-filters" role="group" aria-label="Filter by roadmap category"><button className={recommendedOnly ? 'selected' : ''} onClick={() => setRecommendedOnly(true)} disabled={!profile?.domain}>For you</button><button className={!recommendedOnly && category === 'All' ? 'selected' : ''} onClick={() => { setRecommendedOnly(false); setCategory('All') }}>All roadmaps</button>{categories.slice(1).map((option) => <button key={option} className={!recommendedOnly && category === option ? 'selected' : ''} onClick={() => { setRecommendedOnly(false); setCategory(option) }}>{option}</button>)}</div></section>
+    {profile?.domain && recommendedOnly && <p className="personalization-note">Prioritized for <strong>{profile.domain}</strong>{profile.specialization ? ` · ${profile.specialization}` : ''}. <button className="text-button" onClick={() => setRecommendedOnly(false)}>Explore every roadmap</button></p>}
     {actionError && <p className="form-error" role="alert">{actionError}</p>}
     {loading ? <RoadmapSkeleton /> : error ? <EmptyState title="Roadmaps could not load" text={error} action={<button className="button button-secondary"     onClick={() => loadRoadmaps()}>Try again</button>} /> : visible.length ? <div className="roadmap-library">{visible.map((roadmap) => <RoadmapCard roadmap={roadmap} key={roadmap.id} />)}</div> : <EmptyState title="No roadmaps match that search" text="Try another role or category, or request a custom roadmap." />}
     {dialogOpen && <CustomRoadmapDialog onClose={() => setDialogOpen(false)} onSubmit={createRoadmap} />}

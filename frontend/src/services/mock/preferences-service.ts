@@ -2,6 +2,8 @@ import type { PreferencesService, SaveResponse, StudentProfile, StudyPreferences
 
 const profileDefaults: StudentProfile = {
   fieldOfStudy: 'Computer science',
+  domain: 'Computer Science & IT',
+  specialization: 'AI',
   level: 'University student',
   preferredLanguage: 'English',
   timeZone: 'Europe/Paris',
@@ -45,6 +47,8 @@ export const mockPreferencesService: PreferencesService = {
     return {
       ...read('studymate:profile-preferences', profileDefaults),
       fieldOfStudy: onboarding.fieldOfStudy || profileDefaults.fieldOfStudy,
+      domain: onboarding.domain || profileDefaults.domain,
+      specialization: onboarding.specialization || profileDefaults.specialization,
       level: onboarding.level || profileDefaults.level,
       preferredLanguage: onboarding.preferredLanguage || profileDefaults.preferredLanguage,
       targetRole: onboarding.targetRole || profileDefaults.targetRole,

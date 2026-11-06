@@ -1,4 +1,5 @@
 export type DocumentStatus = 'Queued' | 'Processing' | 'Ready' | 'Failed'
+export type DocumentSource = 'student-uploaded' | 'platform-material'
 
 export type StudyDocument = {
   id: string
@@ -8,6 +9,7 @@ export type StudyDocument = {
   status: DocumentStatus
   addedAt: string
   error?: string
+  source?: DocumentSource
 }
 
 export interface DocumentService {
