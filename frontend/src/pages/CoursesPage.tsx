@@ -15,17 +15,17 @@ export function CoursesPage() {
   const [subject, setSubject] = useState<'All' | CourseSubject>('All')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
 
-  useEffect(() => {
-    let active = true
+  function loadCourses(showLoading = true) {
+    if (showLoading) { setLoading(true); setError('') }
     void courseService.listCourses().then((items) => {
-      if (active) {
-        setCourses(items)
-        setLoading(false)
-      }
-    })
-    return () => { active = false }
-  }, [])
+      setCourses(items)
+      setLoading(false)
+    }).catch(() => { setError('We could not load your course library. Try again; no course data was changed.'); setLoading(false) })
+  }
+  useEffect(() => { let active = true; void courseService.listCourses().then((items) => { if (active) { setCourses(items); setLoading(false) } }).catch(() => { if (active) { setError('We could not load your course library. Try again; no course data was changed.'); setLoading(false) } }); return () => { active = false } }, [])
 
   const visibleCourses = useMemo(() => courses.filter((course) => {
     const matchesSearch = `${course.title} ${course.description} ${course.subject}`.toLowerCase().includes(query.toLowerCase().trim())
@@ -33,17 +33,19 @@ export function CoursesPage() {
   }), [courses, query, subject])
 
   function handleCreate(input: CreateCourseInput) {
+    setActionError('')
     void courseService.createCourse(input).then((course) => {
       setCourses((current) => [course, ...current])
       setDialogOpen(false)
-    })
+    }).catch(() => setActionError('We could not create that course locally. Check the form and try again.'))
   }
 
   return (
     <div className="page-stack courses-page">
       <div className="page-intro courses-intro"><div><span className="eyebrow">Your learning library</span><h2>Courses</h2><p>Curated paths for curious minds, plus space for your own questions.</p></div><button className="button" onClick={() => setDialogOpen(true)}><Plus size={16} /> Create course</button></div>
       <section className="course-toolbar" aria-label="Course filters"><label className="search-box course-search"><Search size={17} /><input placeholder="Search courses" aria-label="Search courses" value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="subject-filters" role="group" aria-label="Filter by subject">{subjects.map((option) => <button key={option} className={subject === option ? 'selected' : ''} onClick={() => setSubject(option)}>{option}</button>)}</div></section>
-      {loading ? <CourseListSkeleton /> : visibleCourses.length === 0 ? <EmptyState title="No courses match that search" text="Try another subject or create a course for the question you want to explore." /> : <div className="course-cards course-card-list">{visibleCourses.map((course, index) => <CourseCard course={course} featured={index === 0} key={course.id} />)}</div>}
+      {actionError && <p className="form-error" role="alert">{actionError}</p>}
+      {loading ? <CourseListSkeleton /> : error ? <EmptyState title="Your courses could not load" text={error} action={<button className="button button-secondary"       onClick={() => loadCourses()}>Try again</button>} /> : visibleCourses.length === 0 ? <EmptyState title={courses.length ? 'No courses match that search' : 'No courses yet'} text={courses.length ? 'Try another subject or create a course for the question you want to explore.' : 'Create your first course to start building a focused study library.'} /> : <div className="course-cards course-card-list">{visibleCourses.map((course, index) => <CourseCard course={course} featured={index === 0} key={course.id} />)}</div>}
       <CourseCreationDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={handleCreate} />
     </div>
   )

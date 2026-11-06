@@ -1,4 +1,4 @@
-import type { ExamQuestion, ExamResult, ExamService, PracticeExam } from '../contracts/exams'
+import type { ExamAttempt, ExamQuestion, ExamResult, ExamService, PracticeExam } from '../contracts/exams'
 
 const options = [
   { id: 'deep-learning', title: 'Deep Learning', concepts: [{ id: 'gradient-descent', title: 'Gradient descent' }, { id: 'backpropagation', title: 'Backpropagation' }, { id: 'regularization', title: 'Regularization' }] },
@@ -23,7 +23,7 @@ const questionBank: Record<string, ExamQuestion[]> = {
     { id: 'bio-q2', concept: 'Cell membranes', type: 'short-answer', prompt: 'Explain one way the cell membrane helps a cell maintain its internal conditions.', },
   ],
 }
-const attempts = [
+const attempts: ExamAttempt[] = [
   { id: 'exam-attempt-1', title: 'Deep learning foundations', course: 'Deep Learning', date: 'Yesterday, 10:15 AM', duration: '38 min', questionCount: 12, result: '9 of 12 useful answers', score: 76, completed: true },
   { id: 'exam-attempt-2', title: 'Statistics essentials', course: 'Statistics for Research', date: 'Monday, 5:20 PM', duration: '24 min', questionCount: 8, result: '6 of 8 useful answers', score: 75, completed: true },
 ]
@@ -85,6 +85,7 @@ export const mockExamService: ExamService = {
       : questionBank[course.id] ?? []
     const exam: PracticeExam = { ...setup, id: `practice-exam-${nextExamNumber++}`, title: `${course.title} practice exam`, course: course.title, topicTitles, questions: questions.slice(0, setup.questionCount) }
     createdExams.push(exam)
+    persistCreatedExams()
     return { ...exam, topicTitles: [...exam.topicTitles] }
   },
   async getExam(id) {
@@ -96,11 +97,32 @@ export const mockExamService: ExamService = {
     if (predefined) return cloneResult(predefined)
     const exam = createdExams.find((item) => item.id === id)
     if (!exam) return undefined
-    return createMockResult(exam)
+    const result = createMockResult(exam)
+    if (!attempts.some((attempt) => attempt.id === exam.id)) {
+      attempts.unshift({ id: exam.id, title: exam.title, course: exam.course, date: 'Just now', duration: result.timeUsed, questionCount: exam.questions.length, result: result.scoreLabel, score: undefined, completed: true })
+    }
+    return result
   },
 }
 
-const createdExams: PracticeExam[] = []
+const createdExams: PracticeExam[] = readCreatedExams()
+
+function readCreatedExams(): PracticeExam[] {
+  try {
+    const saved = localStorage.getItem('studymate:created-exams')
+    return saved ? JSON.parse(saved) as PracticeExam[] : []
+  } catch {
+    return []
+  }
+}
+
+function persistCreatedExams() {
+  try {
+    localStorage.setItem('studymate:created-exams', JSON.stringify(createdExams))
+  } catch {
+    // The exam remains available in the current mock session if local storage is unavailable.
+  }
+}
 
 function cloneResult(result: ExamResult): ExamResult {
   return { ...result, counts: { ...result.counts }, questionResults: result.questionResults.map((item) => ({ ...item, question: { ...item.question, options: item.question.options ? [...item.question.options] : undefined }, expectedIdeas: [...item.expectedIdeas], strengths: [...item.strengths], gaps: [...item.gaps] })), concepts: result.concepts.map((concept) => ({ ...concept })) }

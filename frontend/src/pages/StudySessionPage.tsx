@@ -1,6 +1,6 @@
 import { AlertCircle, ArrowLeft, BookOpen, Check, ChevronRight, CircleHelp, FileText, Lightbulb, LockKeyhole, MessageSquareText, RotateCcw, Send, Sparkles, Target } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState } from '../components/feedback/EmptyState'
 import { Button } from '../components/ui/Button'
 import { ProgressBar } from '../components/ui/ProgressBar'
@@ -10,6 +10,7 @@ import type { StudySessionDetail } from '../services/contracts/sessions'
 
 export function StudySessionPage() {
   const { sessionId } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [session, setSession] = useState<StudySessionDetail>()
   const [loading, setLoading] = useState(true)
@@ -20,7 +21,9 @@ export function StudySessionPage() {
     if (!sessionId) return
     void studySessionService.getSession(sessionId).then((detail) => {
       if (active) {
-        setSession(detail)
+        const roadmapTopic = (location.state as { topic?: string } | null)?.topic
+        if (!detail) return
+        setSession(roadmapTopic ? { ...detail, topic: roadmapTopic, goal: `Build a clear working explanation of ${roadmapTopic}.`, questions: detail.questions.map((question) => ({ ...question, topic: roadmapTopic })) } : detail)
         setLoading(false)
       }
     }).catch(() => {
@@ -30,7 +33,7 @@ export function StudySessionPage() {
       }
     })
     return () => { active = false }
-  }, [sessionId])
+  }, [location.state, sessionId])
 
   if (loading) return <SessionSkeleton />
   if (loadError) return <EmptyState title="This session could not load" text="Your local session state is safe. Return to your course and try again." />
@@ -60,11 +63,11 @@ function StudySessionWorkspace({ session, onExit }: { session: StudySessionDetai
     <div className="study-progress-row"><div><span className="eyebrow">Activity {state.questionIndex + 1} of {session.questions.length}</span><ProgressBar value={progress} /></div><span>{Math.round(progress)}%</span></div>
 
     {state.summaryVisible ? <SessionSummary session={session} summary={summary} onExit={onExit} /> : <div className="study-layout">
-      <main className="study-main">
+      <section className="study-main">
         <section className="study-goal"><div className="goal-icon"><Target size={19} /></div><div><span className="eyebrow">Session goal</span><strong>{session.goal}</strong></div></section>
         <section className="question-card" aria-labelledby="study-question">
         <div className="question-label"><Sparkles size={16} /> Think it through <span className="question-status" aria-live="polite">{state.feedback ? 'Feedback ready' : state.submissionError ? 'Submission error' : 'Awaiting your reasoning'}</span></div>
-        <h1 id="study-question">{question.prompt}</h1>
+        <h2 id="study-question">{question.prompt}</h2>
           {question.context && <p className="question-context">{question.context}</p>}
           <label className="answer-editor"><span>Your answer</span><textarea value={state.answer} disabled={Boolean(state.feedback)} onChange={(event) => update({ answer: event.target.value })} placeholder="Write what you think, in your own words…" rows={7} /></label>
           <div className="answer-footer"><span>{state.feedback ? 'Answer submitted' : `${state.answer.length} characters`}</span>{state.feedback ? <Button variant="secondary" onClick={retry}><RotateCcw size={15} /> Retry this question</Button> : <Button onClick={() => void submitAnswer()} disabled={!state.answer.trim() || evaluating}>{evaluating ? 'Checking mock scenario…' : <><Send size={15} /> Submit answer</>}</Button>}</div>
@@ -76,7 +79,7 @@ function StudySessionWorkspace({ session, onExit }: { session: StudySessionDetai
         {!state.feedback && state.explanationVisible && <div className="explanation-panel"><div className="explanation-icon"><MessageSquareText size={18} /></div><div><span className="eyebrow">A useful explanation</span><p>{question.explanation}</p></div></div>}
         {state.feedback && <button className="continue-question" onClick={continueToNext}>{isLastQuestion ? 'View session summary' : 'Continue to follow-up question'} <ChevronRight size={17} /></button>}
         {state.history.length > 0 && <AnswerHistory history={state.history} />}
-      </main>
+      </section>
       <StudySources mode={session.mode} sources={question.sources} />
     </div>}
     {abandonOpen && <AbandonDialog onCancel={() => setAbandonOpen(false)} onConfirm={onExit} />}

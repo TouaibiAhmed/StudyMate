@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, FileText, LoaderCircle, Trash2, UploadCloud } from 'lucide-react'
 import type { ChangeEvent, DragEvent } from 'react'
+import { useState } from 'react'
 import type { StudyDocument } from '../../services/contracts/documents'
 
 type Props = {
@@ -38,8 +39,9 @@ export function DocumentUpload({ documents, error, onFilesSelected, onRemove, on
 }
 
 function DocumentRow({ document, onRemove, onRetry }: { document: StudyDocument; onRemove: (id: string) => void; onRetry: (id: string) => void }) {
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
   const statusIcon = document.status === 'Ready' ? <CheckCircle2 size={16} /> : document.status === 'Failed' ? <AlertCircle size={16} /> : <LoaderCircle className={document.status === 'Processing' ? 'spin' : ''} size={16} />
-  return <div className="document-row"><div className="document-file-icon"><FileText size={18} /></div><div className="document-copy"><strong>{document.fileName}</strong><span>{formatBytes(document.sizeBytes)} · {document.addedAt}</span>{document.error && <small>{document.error}</small>}</div><span className={`document-status ${document.status.toLowerCase()}`}>{statusIcon}{document.status}</span>{document.status === 'Failed' && <button className="document-retry" onClick={() => onRetry(document.id)}>Retry</button>}<button className="document-remove" onClick={() => onRemove(document.id)} aria-label={`Remove ${document.fileName}`}><Trash2 size={15} /></button></div>
+  return <div className="document-row"><div className="document-file-icon"><FileText size={18} /></div><div className="document-copy"><strong>{document.fileName}</strong><span>{formatBytes(document.sizeBytes)} · {document.addedAt}</span>{document.error && <small>{document.error}</small>}</div><span className={`document-status ${document.status.toLowerCase()}`}>{statusIcon}{document.status}</span>{document.status === 'Failed' && <button className="document-retry" onClick={() => onRetry(document.id)}>Retry</button>}{confirmingRemove ? <span className="document-remove-confirm"><span>Remove file?</span><button onClick={() => onRemove(document.id)}>Yes</button><button onClick={() => setConfirmingRemove(false)}>No</button></span> : <button className="document-remove" onClick={() => setConfirmingRemove(true)} aria-label={`Remove ${document.fileName}`}><Trash2 size={15} /></button>}</div>
 }
 
 function formatBytes(bytes: number) {

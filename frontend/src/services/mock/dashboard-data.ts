@@ -1,27 +1,27 @@
 import type { DashboardCourse, PracticeConcept, Roadmap, StudySession, WeeklyActivity } from '../../types'
 
 export const dashboardGreeting = {
-  name: 'Maya',
-  focus: 'asynchronous JavaScript',
-  recommendation: 'Review promises and async/await for 20 minutes, then try the short practice set.',
+  name: 'Alex',
+  focus: 'deep learning',
+  recommendation: 'Review loss functions for 20 minutes, then try the short practice set.',
 }
 
 export const dashboardCourses: DashboardCourse[] = [
-  { id: 'react', title: 'Advanced React patterns', category: 'Computer science', progress: 68, lessons: 24, completed: 16, color: 'purple', icon: '⚛', lastActivity: 'Finished state management · today', nextLesson: 'Compound components' },
-  { id: 'algorithms', title: 'Algorithms & complexity', category: 'Core CS', progress: 46, lessons: 20, completed: 9, color: 'green', icon: '⌁', lastActivity: 'Solved 3 graph problems · yesterday', nextLesson: 'Breadth-first search' },
-  { id: 'python', title: 'Data science with Python', category: 'Elective', progress: 24, lessons: 32, completed: 8, color: 'orange', icon: '◈', lastActivity: 'Watched data cleaning lesson · Mon', nextLesson: 'Pandas indexing' },
+  { id: 'deep-learning', title: 'Deep Learning', category: 'Deep Learning', progress: 64, lessons: 25, completed: 16, color: 'purple', icon: '∿', lastActivity: 'Finished loss functions · today', nextLesson: 'Backpropagation' },
+  { id: 'statistics', title: 'Statistics for Research', category: 'Statistics', progress: 38, lessons: 24, completed: 9, color: 'green', icon: 'σ', lastActivity: 'Reviewed hypothesis testing · yesterday', nextLesson: 'Confidence intervals' },
+  { id: 'biology', title: 'Cell Biology', category: 'Biology', progress: 21, lessons: 18, completed: 5, color: 'orange', icon: '✣', lastActivity: 'Watched cell signaling lesson · Mon', nextLesson: 'Cell membranes' },
 ]
 
 export const conceptsToPractice: PracticeConcept[] = [
-  { id: 'promises', title: 'Promise chaining', reason: 'You missed 2 questions in your last quiz.', course: 'Advanced React patterns', color: 'purple' },
-  { id: 'recursion', title: 'Recursive base cases', reason: 'Your recent solution needed a hint.', course: 'Algorithms & complexity', color: 'green' },
-  { id: 'joins', title: 'SQL joins', reason: 'It has been 12 days since you reviewed it.', course: 'Data science with Python', color: 'orange' },
+  { id: 'backpropagation', title: 'Backpropagation', reason: 'Your last explanation needs a clearer chain-rule connection.', course: 'Deep Learning', color: 'purple' },
+  { id: 'hypothesis-testing', title: 'Hypothesis testing', reason: 'The decision rule still needs practice.', course: 'Statistics for Research', color: 'green' },
+  { id: 'cell-signaling', title: 'Cell signaling', reason: 'Your analogy needs more mechanism detail.', course: 'Cell Biology', color: 'orange' },
 ]
 
 export const recentSessions: StudySession[] = [
-  { id: 'session-react-01', title: 'State management patterns', course: 'Advanced React patterns', duration: '32 min', completedAt: 'Today, 10:42 AM', score: '92%' },
-  { id: 'session-algorithms-01', title: 'Graph traversal drills', course: 'Algorithms & complexity', duration: '48 min', completedAt: 'Yesterday, 4:18 PM', score: '84%' },
-  { id: 'session-python-01', title: 'Cleaning messy datasets', course: 'Data science with Python', duration: '25 min', completedAt: 'Monday, 9:05 AM' },
+  { id: 'deep-session-1', title: 'Loss functions and intuition', course: 'Deep Learning', duration: '36 min', completedAt: 'Today, 9:20 AM', score: '90%' },
+  { id: 'statistics-session-1', title: 'Choosing the right test', course: 'Statistics for Research', duration: '31 min', completedAt: 'Yesterday, 4:45 PM', score: '88%' },
+  { id: 'session-general-01', title: 'Explaining complex ideas', course: 'Independent study', duration: '25 min', completedAt: 'Monday, 9:05 AM' },
 ]
 
 export const weeklyActivity: WeeklyActivity[] = [
@@ -35,9 +35,9 @@ export const weeklyActivity: WeeklyActivity[] = [
 ]
 
 export const dashboardRoadmap: Roadmap = {
-  title: 'Frontend engineer',
-  description: 'A practical path from JavaScript fluency to building production interfaces.',
-  progress: 61,
-  modules: 12,
+  title: 'Data Analyst',
+  description: 'A practical path from messy questions to decision-ready insights.',
+  progress: 42,
+  modules: 8,
   color: 'purple',
 }

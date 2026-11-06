@@ -14,29 +14,28 @@ export function ExamsPage() {
   const [options, setOptions] = useState<ExamCourseOption[]>([])
   const [loading, setLoading] = useState(true)
   const [setupOpen, setSetupOpen] = useState(false)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    let active = true
+  function loadExamLibrary(showLoading = true) {
+    if (showLoading) { setLoading(true); setError('') }
     void Promise.all([examService.listAttempts(), examService.getOptions()]).then(([history, choices]) => {
-      if (active) {
-        setAttempts(history)
-        setOptions(choices)
-        setLoading(false)
-      }
-    })
-    return () => { active = false }
-  }, [])
+      setAttempts(history)
+      setOptions(choices)
+      setLoading(false)
+    }).catch(() => { setError('We could not load your exam history. Try again; your previous attempts are unchanged.'); setLoading(false) })
+  }
+  useEffect(() => { let active = true; void Promise.all([examService.listAttempts(), examService.getOptions()]).then(([history, choices]) => { if (active) { setAttempts(history); setOptions(choices); setLoading(false) } }).catch(() => { if (active) { setError('We could not load your exam history. Try again; your previous attempts are unchanged.'); setLoading(false) } }); return () => { active = false } }, [])
 
   return <div className="page-stack exams-page">
     <div className="page-intro"><div><span className="eyebrow">Test your knowledge</span><h2>Practice exams</h2><p>Use a focused exam to check your understanding, then turn the result into your next study step.</p></div><Button onClick={() => setSetupOpen(true)}><Plus size={16} /> Create practice exam</Button></div>
     <section className="exam-hero"><div className="exam-hero-icon"><FileQuestion size={25} /></div><div><span className="eyebrow">A useful check-in</span><h3>Build an exam around what you are learning now.</h3><p>Choose a course, focus concepts, and a pace that leaves room for your own reasoning.</p></div><button className="round-arrow" onClick={() => setSetupOpen(true)} aria-label="Create practice exam"><ArrowRight size={18} /></button></section>
-    <section className="exam-history-section"><div className="section-heading"><div><span className="eyebrow">Your record</span><h2>Past attempts</h2></div><span className="muted">{attempts.length} completed</span></div>{loading ? <ExamHistorySkeleton /> : attempts.length ? <div className="exam-history-list">{attempts.map((attempt) => <ExamAttemptRow attempt={attempt} key={attempt.id} />)}</div> : <EmptyState title="No completed exams yet" text="Create a practice exam when you are ready to see your results and revision suggestions here." />}</section>
+    <section className="exam-history-section"><div className="section-heading"><div><span className="eyebrow">Your record</span><h2>Past attempts</h2></div><span className="muted">{attempts.length} completed</span></div>{loading ? <ExamHistorySkeleton /> : error ? <EmptyState title="Exam history is unavailable" text={error} action={<button className="button button-secondary"     onClick={() => loadExamLibrary()}>Try again</button>} /> : attempts.length ? <div className="exam-history-list">{attempts.map((attempt) => <ExamAttemptRow attempt={attempt} key={attempt.id} />)}</div> : <EmptyState title="No completed exams yet" text="Create a practice exam when you are ready to see your results and revision suggestions here." />}</section>
     {setupOpen && <ExamSetupDialog options={options} onClose={() => setSetupOpen(false)} />}
   </div>
 }
 
 function ExamAttemptRow({ attempt }: { attempt: ExamAttempt }) {
-  return <Link to={`/exams/${attempt.id}/results`} className="exam-history-row"><div className="exam-history-icon"><Award size={18} /></div><div className="exam-history-copy"><strong>{attempt.title}</strong><span>{attempt.course} · {attempt.date}</span></div><div className="exam-history-meta"><span><Clock3 size={13} /> {attempt.duration}</span><strong>{attempt.score}%</strong><small>{attempt.result}</small></div><ChevronRight size={17} className="exam-history-arrow" /></Link>
+  return <Link to={`/exams/${attempt.id}/results`} className="exam-history-row"><div className="exam-history-icon"><Award size={18} /></div><div className="exam-history-copy"><strong>{attempt.title}</strong><span>{attempt.course} · {attempt.date}</span></div><div className="exam-history-meta"><span><Clock3 size={13} /> {attempt.duration}</span><strong>{attempt.score === undefined ? 'Mock' : `${attempt.score}%`}</strong><small>{attempt.result}</small></div><ChevronRight size={17} className="exam-history-arrow" /></Link>
 }
 
 function ExamSetupDialog({ options, onClose }: { options: ExamCourseOption[]; onClose: () => void }) {

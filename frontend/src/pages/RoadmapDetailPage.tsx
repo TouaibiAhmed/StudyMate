@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Background, Controls, MiniMap, ReactFlow, Handle, Position, type Edge, type Node, type NodeProps } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { EmptyState } from '../components/feedback/EmptyState'
+import { LoadingState } from '../components/feedback/LoadingState'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { roadmapService } from '../services/api-client'
 import { roadmapGraphData } from '../services/mock/roadmap-graph-data'
@@ -17,8 +18,10 @@ const statusOptions: RoadmapTopicStatus[] = ['Not started', 'In progress', 'Comp
 export function RoadmapDetailPage() {
   const { roadmapId } = useParams()
   const [roadmap, setRoadmap] = useState<RoadmapDetail>()
-  useEffect(() => { if (roadmapId) void roadmapService.getRoadmap(roadmapId).then(setRoadmap) }, [roadmapId])
-  if (!roadmap) return <EmptyState title="Roadmap not found" text="This learning path may no longer be available." />
+  const [loading, setLoading] = useState(true)
+  useEffect(() => { if (roadmapId) void roadmapService.getRoadmap(roadmapId).then((value) => { setRoadmap(value); setLoading(false) }).catch(() => setLoading(false)) }, [roadmapId])
+  if (loading) return <LoadingState label="Loading roadmap" />
+  if (!roadmap) return <EmptyState title="Roadmap not found" text="This learning path may no longer be available." action={<Link className="button button-secondary" to="/roadmaps">Back to roadmaps</Link>} />
   return <RoadmapWorkspace roadmap={roadmap} />
 }
 

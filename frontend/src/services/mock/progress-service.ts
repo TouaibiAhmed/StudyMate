@@ -1,4 +1,5 @@
-import type { ProgressService } from '../contracts/progress'
+import type { ConceptStatus, ProgressAttempt, ProgressService, ProgressSession } from '../contracts/progress'
+import { readLearningRecords } from './learning-records'
 
 const progressData = {
   studyMinutes: 275,
@@ -15,7 +16,6 @@ const progressData = {
   recentSessions: [
     { id: 'deep-session-1', title: 'Loss functions and intuition', course: 'Deep Learning', date: 'Today, 9:20 AM', duration: '36 min', outcome: 'Connected error to parameter updates', verdict: 'Correct' as const, completed: true },
     { id: 'statistics-session-1', title: 'Choosing the right test', course: 'Statistics for Research', date: 'Yesterday, 4:45 PM', duration: '31 min', outcome: 'Named the test; decision rule needs work', verdict: 'Partially correct' as const, completed: true },
-    { id: 'session-react-02', title: 'Compound components', course: 'Advanced React patterns', date: 'Monday, 10:42 AM', duration: '42 min', outcome: 'Explained shared context clearly', verdict: 'Correct' as const, completed: true },
   ],
   weeklyActivity: [
     { day: 'Mon', sessions: 2, questions: 5, minutes: 58 },
@@ -30,10 +30,26 @@ const progressData = {
 
 export const mockProgressService: ProgressService = {
   async getProgress() {
+    const records = readLearningRecords()
+    const recordByTopic = new Map(records.map((record) => [record.topic.toLowerCase(), record]))
+    const newSessions: ProgressSession[] = records.slice(-5).reverse().map((record) => ({ id: record.sessionId, title: record.topic, course: 'Focused study', date: 'Just now', duration: 'Local session', outcome: record.feedback.nextActivity, verdict: record.feedback.verdict === 'Correct' ? 'Correct' : record.feedback.verdict === 'Partially correct' ? 'Partially correct' : 'Needs review', completed: true }))
+    const concepts = progressData.concepts.map((concept) => {
+      const record = recordByTopic.get(concept.name.toLowerCase())
+      if (!record) return { ...concept, attempts: concept.attempts.map((attempt) => ({ ...attempt })) }
+      const status: ConceptStatus = record.feedback.verdict === 'Correct' ? 'Good evidence' : record.feedback.verdict === 'Partially correct' ? 'Developing' : 'Needs practice'
+      const attempt: ProgressAttempt = { id: record.id, date: 'Just now', verdict: record.feedback.verdict === 'Correct' ? 'Correct' : record.feedback.verdict === 'Partially correct' ? 'Partially correct' : 'Needs review', answer: record.answer, evidence: record.feedback.strengths.join(' ') || 'Review the missing ideas below.', confidence: record.feedback.confidence }
+      return {
+        ...concept,
+        status,
+        progress: status === 'Good evidence' ? 100 : status === 'Developing' ? 65 : 35,
+        evidence: `${record.feedback.verdict} evidence from your latest study attempt`,
+        attempts: [attempt, ...concept.attempts],
+      }
+    })
     return {
       ...progressData,
-      concepts: progressData.concepts.map((concept) => ({ ...concept })),
-      recentSessions: progressData.recentSessions.map((session) => ({ ...session })),
+      concepts,
+      recentSessions: [...newSessions, ...progressData.recentSessions].map((session) => ({ ...session })),
       weeklyActivity: progressData.weeklyActivity.map((day) => ({ ...day })),
     }
   },

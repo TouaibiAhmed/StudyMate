@@ -48,7 +48,7 @@ function DashboardContent({ data, recommendationVisible, onDismissRecommendation
           <h2>Good morning, {data.greeting.name}.</h2>
           <p>Let’s make your next study hour count. Your current focus is <strong>{data.greeting.focus}</strong>.</p>
           {recommendationVisible && <div className="recommendation"><div className="recommendation-mark"><Target size={17} /></div><div><span className="eyebrow">Your next best step</span><strong>{data.greeting.recommendation}</strong></div><button className="recommendation-dismiss" onClick={onDismissRecommendation} aria-label="Dismiss recommendation"><X size={15} /></button></div>}
-          <Link to="/study/session-react-02" className="button"><Play size={16} fill="currentColor" /> Start a focused session</Link>
+          <Link to="/study/deep-session-1" className="button"><Play size={16} fill="currentColor" /> Start a focused session</Link>
         </div>
         <div className="lead-note"><span className="lead-note-number">07</span><span className="lead-note-label">day<br />streak</span><Flame size={20} /></div>
       </section>
@@ -58,7 +58,7 @@ function DashboardContent({ data, recommendationVisible, onDismissRecommendation
         <div className="continue-content">
           <div className="continue-course-mark purple">⚛</div>
           <div className="continue-course-copy"><span className="course-tag">Advanced React patterns</span><h3>Compound components</h3><p>Lesson 17 of 24 · about 18 minutes</p><ProgressBar value={68} /><small>68% complete</small></div>
-          <Link to="/study/session-react-02" className="continue-action"><span>Resume lesson</span><ChevronRight size={19} /></Link>
+          <Link to="/study/deep-session-1" className="continue-action"><span>Resume lesson</span><ChevronRight size={19} /></Link>
         </div>
       </section>
 
@@ -76,8 +76,8 @@ function DashboardContent({ data, recommendationVisible, onDismissRecommendation
       </div>
 
       <section className="dashboard-bottom">
-        <Link to="/roadmaps/frontend-engineer" className="roadmap-preview"><div className="roadmap-preview-icon"><BookOpen size={20} /></div><div className="roadmap-preview-copy"><span className="eyebrow">Your learning roadmap</span><h2>{data.roadmap.title}</h2><p>{data.roadmap.progress}% complete · Module 7 of {data.roadmap.modules}</p><ProgressBar value={data.roadmap.progress} /></div><ArrowRight size={18} /></Link>
-        <Link to="/exams/react-fundamentals" className="practice-suggestion"><div><span className="eyebrow">Coming up next</span><h2>Try a practice exam</h2><p>Test your React fundamentals in 25 minutes.</p></div><div className="suggestion-arrow"><ArrowRight size={18} /></div></Link>
+        <Link to="/roadmaps/data-analyst" className="roadmap-preview"><div className="roadmap-preview-icon"><BookOpen size={20} /></div><div className="roadmap-preview-copy"><span className="eyebrow">Your learning roadmap</span><h2>{data.roadmap.title}</h2><p>{data.roadmap.progress}% complete · Module 4 of {data.roadmap.modules}</p><ProgressBar value={data.roadmap.progress} /></div><ArrowRight size={18} /></Link>
+        <Link to="/exams" className="practice-suggestion"><div><span className="eyebrow">Coming up next</span><h2>Try a practice exam</h2><p>Test your Deep Learning concepts in 25 minutes.</p></div><div className="suggestion-arrow"><ArrowRight size={18} /></div></Link>
       </section>
     </div>
   )

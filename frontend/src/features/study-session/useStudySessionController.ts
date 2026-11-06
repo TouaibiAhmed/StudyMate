@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { studySessionService } from '../../services/api-client'
 import type { AnswerRecord, StudyFeedback, StudyQuestion, StudySessionDetail } from '../../services/contracts/sessions'
+import { learningRecordService } from '../../services/api-client'
 
 export type SessionControllerState = {
   answer: string
@@ -43,6 +44,8 @@ export function useStudySessionController(session?: StudySessionDetail) {
     setEvaluating(true)
     try {
       const feedback = await studySessionService.evaluateAnswer(session.id, question.id, state.history.filter((record) => record.questionId === question.id).length)
+      const record = { id: `${session.id}-${question.id}-${Date.now()}`, sessionId: session.id, topic: question.topic, answer: state.answer.trim(), feedback, completedAt: new Date().toISOString() }
+      learningRecordService.addRecord(record)
       setState((current) => ({
         ...current,
         feedback,

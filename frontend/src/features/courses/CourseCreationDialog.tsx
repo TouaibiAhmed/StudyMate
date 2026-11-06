@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import type { FormEvent } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CourseLevel, CourseSubject, CreateCourseInput } from '../../services/contracts/courses'
 import { Button } from '../../components/ui/Button'
 
@@ -19,6 +19,15 @@ export function CourseCreationDialog({ open, onClose, onSubmit }: Props) {
   const [level, setLevel] = useState<CourseLevel>('Beginner')
   const [description, setDescription] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose, open])
 
   if (!open) return null
 
