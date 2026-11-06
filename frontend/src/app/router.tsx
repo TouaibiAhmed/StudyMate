@@ -10,6 +10,8 @@ import { ProfilePage } from '../pages/ProfilePage'
 import { PlaceholderPage } from '../pages/PlaceholderPage'
 import { CourseDetailPage } from '../pages/CourseDetailPage'
 import { RoadmapDetailPage } from '../pages/RoadmapDetailPage'
+import { ActiveExamPage } from '../pages/ActiveExamPage'
+import { ExamResultsPage } from '../pages/ExamResultsPage'
 
 export const router = createBrowserRouter([
   {
@@ -24,8 +26,8 @@ export const router = createBrowserRouter([
       { path: 'roadmaps', element: <RoadmapsPage /> },
       { path: 'roadmaps/:roadmapId', element: <RoadmapDetailPage /> },
       { path: 'exams', element: <ExamsPage /> },
-      { path: 'exams/:examId', element: <PlaceholderPage eyebrow="Practice exam" title="Exam briefing" description="Review the exam instructions and begin when you are ready." /> },
-      { path: 'exams/:examId/results', element: <PlaceholderPage eyebrow="Practice exam" title="Exam results" description="Your score, feedback, and recommended review topics will appear here." /> },
+      { path: 'exams/:examId', element: <ActiveExamPage /> },
+      { path: 'exams/:examId/results', element: <ExamResultsPage /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: 'settings', element: <PlaceholderPage eyebrow="Account" title="Settings" description="Manage notifications, study preferences, and your account." /> },
     ],
