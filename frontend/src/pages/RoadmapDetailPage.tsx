@@ -7,7 +7,6 @@ import { EmptyState } from '../components/feedback/EmptyState'
 import { LoadingState } from '../components/feedback/LoadingState'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { roadmapService } from '../services/api-client'
-import { roadmapGraphData } from '../services/mock/roadmap-graph-data'
 import type { RoadmapDetail, RoadmapGraphData, RoadmapGraphTopic, RoadmapTopicStatus } from '../services/contracts/roadmaps'
 
 type TopicNodeData = RoadmapGraphTopic & { overriddenStatus?: RoadmapTopicStatus }
@@ -18,16 +17,24 @@ const statusOptions: RoadmapTopicStatus[] = ['Not started', 'In progress', 'Comp
 export function RoadmapDetailPage() {
   const { roadmapId } = useParams()
   const [roadmap, setRoadmap] = useState<RoadmapDetail>()
+  const [graph, setGraph] = useState<RoadmapGraphData>()
   const [loading, setLoading] = useState(true)
-  useEffect(() => { if (roadmapId) void roadmapService.getRoadmap(roadmapId).then((value) => { setRoadmap(value); setLoading(false) }).catch(() => setLoading(false)) }, [roadmapId])
+  useEffect(() => {
+    if (!roadmapId) return
+    void Promise.all([roadmapService.getRoadmap(roadmapId), roadmapService.getGraph?.(roadmapId)]).then(([value, graphValue]) => {
+      setRoadmap(value)
+      setGraph(graphValue)
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [roadmapId])
   if (loading) return <LoadingState label="Loading roadmap" />
   if (!roadmap) return <EmptyState title="Roadmap not found" text="This learning path may no longer be available." action={<Link className="button button-secondary" to="/roadmaps">Back to roadmaps</Link>} />
-  return <RoadmapWorkspace roadmap={roadmap} />
+  return <RoadmapWorkspace roadmap={roadmap} graph={graph} />
 }
 
-function RoadmapWorkspace({ roadmap }: { roadmap: RoadmapDetail }) {
+function RoadmapWorkspace({ roadmap, graph: serviceGraph }: { roadmap: RoadmapDetail; graph?: RoadmapGraphData }) {
   const navigate = useNavigate()
-  const graph = useMemo(() => roadmapGraphData[roadmap.id] ?? createFallbackGraph(roadmap), [roadmap])
+  const graph = useMemo(() => serviceGraph ?? createFallbackGraph(roadmap), [roadmap, serviceGraph])
   const [selectedId, setSelectedId] = useState(graph.topics[0]?.id)
   const [overrides, setOverrides] = useState<Record<string, RoadmapTopicStatus>>({})
   const selectedTopic = graph.topics.find((topic) => topic.id === selectedId)
@@ -36,11 +43,41 @@ function RoadmapWorkspace({ roadmap }: { roadmap: RoadmapDetail }) {
   const edges = useMemo<Edge[]>(() => graph.edges.map((edge) => ({ ...edge, type: 'smoothstep', animated: false })), [graph])
 
   function setTopicStatus(status: RoadmapTopicStatus) {
-    if (selectedTopic) setOverrides((current) => ({ ...current, [selectedTopic.id]: status }))
+    if (selectedTopic) {
+      setOverrides((current) => ({ ...current, [selectedTopic.id]: status }))
+      if (roadmapService.overrideNodeStatus) {
+        roadmapService.overrideNodeStatus(roadmap.id, selectedTopic.id, status).catch(console.error)
+      }
+    }
   }
 
   function resetTopicStatus() {
-    if (selectedTopic) setOverrides((current) => { const next = { ...current }; delete next[selectedTopic.id]; return next })
+    if (selectedTopic) {
+      setOverrides((current) => { const next = { ...current }; delete next[selectedTopic.id]; return next })
+      if (roadmapService.overrideNodeStatus) {
+        roadmapService.overrideNodeStatus(roadmap.id, selectedTopic.id, selectedTopic.status).catch(console.error)
+      }
+    }
+  }
+
+  async function handleStudy() {
+    if (!selectedTopic) return
+    if (roadmapService.startNodeSession) {
+      try {
+        const sessionRes = await roadmapService.startNodeSession(roadmap.id, selectedTopic.id)
+        if (sessionRes?.sessionId) {
+          navigate(`/study/${sessionRes.sessionId}`, {
+            state: { roadmapId: roadmap.id, topicId: selectedTopic.id, topic: selectedTopic.title },
+          })
+          return
+        }
+      } catch (err) {
+        console.warn('Failed to start node study session via service, falling back:', err)
+      }
+    }
+    navigate('/study/session-general-01', {
+      state: { roadmapId: roadmap.id, topicId: selectedTopic.id, topic: selectedTopic.title },
+    })
   }
 
   return <div className="page-stack roadmap-detail-page">
@@ -48,7 +85,7 @@ function RoadmapWorkspace({ roadmap }: { roadmap: RoadmapDetail }) {
     <section className={`roadmap-detail-hero roadmap-${roadmap.color}`}><div className="roadmap-icon"><Map size={24} /></div><div><span className="eyebrow">{roadmap.category} · {roadmap.source}</span><h2>{roadmap.role}</h2><p>{roadmap.description}</p></div></section>
     <div className="roadmap-detail-grid roadmap-graph-grid">
       <main className="progress-panel roadmap-graph-panel"><div className="section-heading"><div><span className="eyebrow">Prerequisite map</span><h2>Follow the connections</h2></div><div className="roadmap-graph-legend"><span><i className="legend-core" /> Core</span><span><i className="legend-optional" /> Optional</span></div></div><p className="panel-intro">Select a topic to inspect its evidence and prerequisites. Complete the connections before jumping ahead.</p><div className="roadmap-flow"><ReactFlow nodes={nodes} edges={edges} nodeTypes={{ topic: TopicNode }} onNodeClick={(_, node) => setSelectedId(node.id)} fitView fitViewOptions={{ padding: 0.18 }} minZoom={0.45} maxZoom={1.3} nodesConnectable={false}><Background color="var(--line)" gap={22} size={1} /><Controls showInteractive={false} /><MiniMap nodeColor={(node) => node.data.optional ? 'var(--lilac)' : 'var(--forest)'} maskColor="rgba(247,243,235,.72)" /></ReactFlow></div></main>
-      <aside className="progress-panel roadmap-topic-detail">{selectedTopic ? <TopicDetail topic={selectedTopic} status={statusFor(selectedTopic)} overridden={Boolean(overrides[selectedTopic.id])} onStatusChange={setTopicStatus} onReset={resetTopicStatus} onStudy={() => navigate('/study/session-general-01', { state: { roadmapId: roadmap.id, topicId: selectedTopic.id, topic: selectedTopic.title } })} /> : <div className="inline-empty">Select a topic to see its details.</div>}</aside>
+      <aside className="progress-panel roadmap-topic-detail">{selectedTopic ? <TopicDetail topic={selectedTopic} status={statusFor(selectedTopic)} overridden={Boolean(overrides[selectedTopic.id])} onStatusChange={setTopicStatus} onReset={resetTopicStatus} onStudy={handleStudy} /> : <div className="inline-empty">Select a topic to see its details.</div>}</aside>
     </div>
     <section className="progress-panel roadmap-detail-footer"><div><span className="eyebrow">Roadmap note</span><p>{roadmap.note}</p></div><div className="roadmap-progress-summary"><strong>{roadmap.progress}%</strong><span>overall progress</span><ProgressBar value={roadmap.progress} color={roadmap.color === 'orange' ? 'orange' : roadmap.color === 'green' ? 'green' : 'purple'} /></div></section>
   </div>

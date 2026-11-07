@@ -41,10 +41,13 @@ export type CreateCourseInput = {
   subject: CourseSubject
   level: CourseLevel
   description: string
+  domain?: string
 }
 
 export interface CourseService {
   listCourses(): Promise<CourseSummary[]>
   createCourse(input: CreateCourseInput): Promise<CourseSummary>
   getCourse(courseId: string): Promise<CourseDetail | undefined>
+  deleteCourse(courseId: string): Promise<void>
+  getConcepts?(courseId: string): Promise<CourseConcept[]>
 }

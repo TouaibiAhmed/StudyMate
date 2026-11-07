@@ -10,8 +10,17 @@ type ExamPersistedState = {
 
 const storageKey = (examId: string) => `studymate:exam:${examId}`
 
+function computeInitialSeconds(exam: PracticeExam): number {
+  if (exam.deadlineAt) {
+    const remaining = Math.round((new Date(exam.deadlineAt).getTime() - Date.now()) / 1000)
+    return Math.max(remaining, 0)
+  }
+  return exam.timeLimit * 60
+}
+
 function readState(exam: PracticeExam): ExamPersistedState {
-  const fallback = { answers: {}, flagged: [], currentIndex: 0, remainingSeconds: exam.timeLimit * 60 }
+  const serverSeconds = computeInitialSeconds(exam)
+  const fallback = { answers: {}, flagged: [], currentIndex: 0, remainingSeconds: serverSeconds }
   try {
     const saved = sessionStorage.getItem(storageKey(exam.id))
     if (!saved) return fallback
@@ -20,7 +29,8 @@ function readState(exam: PracticeExam): ExamPersistedState {
       answers: parsed.answers ?? {},
       flagged: parsed.flagged ?? [],
       currentIndex: Math.min(Math.max(parsed.currentIndex ?? 0, 0), Math.max(exam.questions.length - 1, 0)),
-      remainingSeconds: Math.max(parsed.remainingSeconds ?? fallback.remainingSeconds, 0),
+      // Always prefer server deadline over cached value to prevent clock drift exploits
+      remainingSeconds: exam.deadlineAt ? serverSeconds : Math.max(parsed.remainingSeconds ?? fallback.remainingSeconds, 0),
     }
   } catch {
     return fallback
@@ -42,9 +52,17 @@ export function useExamController(exam: PracticeExam) {
 
   useEffect(() => {
     if (remainingSeconds <= 0) return
-    const timer = window.setInterval(() => setRemainingSeconds((seconds) => Math.max(seconds - 1, 0)), 1000)
+    const timer = window.setInterval(() => {
+      if (exam.deadlineAt) {
+        // Re-derive from server deadline on every tick to prevent drift
+        const remaining = Math.round((new Date(exam.deadlineAt).getTime() - Date.now()) / 1000)
+        setRemainingSeconds(Math.max(remaining, 0))
+      } else {
+        setRemainingSeconds((seconds) => Math.max(seconds - 1, 0))
+      }
+    }, 1000)
     return () => window.clearInterval(timer)
-  }, [remainingSeconds])
+  }, [exam.deadlineAt, remainingSeconds])
 
   const answerQuestion = useCallback((answer: string) => {
     if (!currentQuestion) return

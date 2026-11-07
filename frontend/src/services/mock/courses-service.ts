@@ -104,6 +104,7 @@ export const mockCourseService: CourseService = {
       materialCount: 0,
       color: input.subject === 'Deep Learning' ? 'forest' : input.subject === 'Statistics' ? 'coral' : input.subject === 'Biology' ? 'sage' : 'lilac',
       icon: '＋',
+      domain: input.domain,
     }
     mockCourses.unshift(course)
     return { ...course }
@@ -113,5 +114,10 @@ export const mockCourseService: CourseService = {
     if (!course) return undefined
     const detail = courseDetails[courseId] ?? { concepts: [], sessions: [] }
     return { ...course, concepts: detail.concepts, sessions: detail.sessions }
+  },
+  async deleteCourse(courseId) {
+    const index = mockCourses.findIndex((item) => item.id === courseId)
+    if (index >= 0) mockCourses.splice(index, 1)
+    delete courseDetails[courseId]
   },
 }

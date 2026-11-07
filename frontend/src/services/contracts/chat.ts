@@ -8,11 +8,19 @@ export type ChatContext = {
   topicTitle?: string
 }
 
+export type ChatSource = {
+  title: string
+  page?: number
+  excerpt?: string
+}
+
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
   content: string
   createdAt: string
+  /** Source references returned by the backend for grounded responses */
+  sources?: ChatSource[]
 }
 
 export type ChatConversation = {

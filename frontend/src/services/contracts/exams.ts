@@ -76,6 +76,10 @@ export type PracticeExam = ExamSetup & {
   course: string
   topicTitles: string[]
   questions: ExamQuestion[]
+  /** Present in api mode: the attempt id used for save/submit calls */
+  attemptId?: string
+  /** Present in api mode: ISO timestamp of the server-authoritative deadline */
+  deadlineAt?: string
 }
 
 export interface ExamService {
@@ -84,4 +88,8 @@ export interface ExamService {
   createExam(setup: ExamSetup): Promise<PracticeExam>
   getExam(id: string): Promise<PracticeExam | undefined>
   getResult(id: string): Promise<ExamResult | undefined>
+  /** Optional: save a single answer to the server */
+  saveAnswer?(attemptId: string, questionId: string, answer: string, flagged: boolean): Promise<void>
+  /** Optional: submit the attempt to the server; rejects with code 'conflict' if already submitted */
+  submitAttempt?(attemptId: string): Promise<void>
 }

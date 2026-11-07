@@ -11,16 +11,25 @@ import { mockLearningRecordService } from './mock/learning-records'
 import { mockAuthService } from './mock/mock-auth.service'
 import { mockChatService } from './mock/chat-service'
 import { mockStudyToolsService } from './mock/study-tools-service'
+import { apiAuthService, apiChatService, apiCourseService, apiDashboardService, apiDocumentService, apiExamService, apiPreferencesService, apiProgressService, apiRoadmapService, apiStudySessionService, apiStudyToolsService } from './api/api-services'
+import { invalidateDashboard, getDashboardVersion } from './api/api-dashboard.service'
+import { selectService } from './service-mode'
+export { ApiClient, ApiError, apiClient } from './http-client'
+export type { ApiClientOptions, ApiErrorCode, ApiErrorPayload, ApiRequestOptions, ApiResponse } from './http-client'
 export const studyService = mockStudyService
-export const dashboardService = mockDashboardService
-export const courseService = mockCourseService
-export const documentService = mockDocumentService
-export const studySessionService = mockStudySessionService
-export const progressService = mockProgressService
-export const roadmapService = mockRoadmapService
-export const examService = mockExamService
-export const preferencesService = mockPreferencesService
+export const dashboardService = selectService('dashboard', mockDashboardService, apiDashboardService)
+export const courseService = selectService('courses', mockCourseService, apiCourseService)
+export const documentService = selectService('documents', mockDocumentService, apiDocumentService)
+export const studySessionService = selectService('study-sessions', mockStudySessionService, apiStudySessionService)
+export const progressService = selectService('progress', mockProgressService, apiProgressService)
+export const roadmapService = selectService('roadmaps', mockRoadmapService, apiRoadmapService)
+export const examService = selectService('exams', mockExamService, apiExamService)
+export const preferencesService = selectService('profile', mockPreferencesService, apiPreferencesService)
+export const profileService = preferencesService
+export { apiAuthService, apiPreferencesService, apiProfileService, apiCourseService, apiDocumentService, apiStudySessionService, apiProgressService, apiRoadmapService }
+export { mockAuthService, mockPreferencesService, mockCourseService, mockDocumentService, mockStudySessionService, mockProgressService, mockRoadmapService }
 export const learningRecordService = mockLearningRecordService
-export const authService = mockAuthService
-export const chatService = mockChatService
-export const studyToolsService = mockStudyToolsService
+export const authService = selectService('auth', mockAuthService, apiAuthService)
+export const chatService = selectService('chat', mockChatService, apiChatService)
+export const studyToolsService = selectService('study-tools', mockStudyToolsService, apiStudyToolsService)
+export { invalidateDashboard, getDashboardVersion }

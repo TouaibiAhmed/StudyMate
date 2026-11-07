@@ -1,4 +1,5 @@
-import type { CreateRoadmapInput, RoadmapDetail, RoadmapService, RoadmapSummary } from '../contracts/roadmaps'
+import type { CreateRoadmapInput, RoadmapDetail, RoadmapService, RoadmapSummary, RoadmapTopicStatus } from '../contracts/roadmaps'
+import { roadmapGraphData } from './roadmap-graph-data'
 
 const roadmapDetails: RoadmapDetail[] = [
   {
@@ -48,10 +49,12 @@ export const mockRoadmapService: RoadmapService = {
       color: roadmap.color,
     }))
   },
+
   async getRoadmap(id) {
     const roadmap = roadmapDetails.find((item) => item.id === id)
     return roadmap ? { ...roadmap, topics: roadmap.topics.map((topic) => ({ ...topic })) } : undefined
   },
+
   async createRoadmap(input: CreateRoadmapInput) {
     const roadmap: RoadmapDetail = {
       id: `generated-${input.role.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`,
@@ -63,5 +66,26 @@ export const mockRoadmapService: RoadmapService = {
     }
     roadmapDetails.unshift(roadmap)
     return { ...roadmap, topics: roadmap.topics.map((topic) => ({ ...topic })) }
+  },
+
+  async getGraph(id) {
+    const graph = roadmapGraphData[id]
+    return graph ? { topics: graph.topics.map((topic) => ({ ...topic })), edges: graph.edges.map((edge) => ({ ...edge })) } : undefined
+  },
+
+  async overrideNodeStatus(roadmapId: string, nodeId: string, status: RoadmapTopicStatus) {
+    const graph = roadmapGraphData[roadmapId]
+    const topic = graph?.topics.find((t) => t.id === nodeId)
+    if (topic) topic.status = status
+  },
+
+  async startNodeSession(roadmapId: string, nodeId: string) {
+    const graph = roadmapGraphData[roadmapId]
+    const topic = graph?.topics.find((t) => t.id === nodeId)
+    return { id: 'session-general-01', topic: topic?.title || 'Roadmap Topic' }
+  },
+
+  async followRoadmap(roadmapId: string) {
+    return { userRoadmapId: `user-roadmap-${roadmapId}` }
   },
 }

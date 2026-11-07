@@ -15,7 +15,7 @@ export function LoginPage() {
   async function submit(input: LoginInput) {
     setSubmitting(true)
     setError('')
-    try { await login(input); navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true }) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Sign in failed. Check the demo credentials and try again.') } finally { setSubmitting(false) }
+    try { await login(input); navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true }) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Sign in failed. Check your credentials and try again.') } finally { setSubmitting(false) }
   }
   return <AuthLayout eyebrow="Welcome back" title="Return to your study space." text="Sign in to pick up your courses, sessions, and progress."><LoginForm onSubmit={(input) => void submit(input)} submitting={submitting} error={error} /><p className="auth-switch">New to StudyMate? <Link to="/signup">Create a mock account</Link></p></AuthLayout>
 }

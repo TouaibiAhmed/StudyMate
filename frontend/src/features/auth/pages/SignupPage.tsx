@@ -14,7 +14,7 @@ export function SignupPage() {
   async function submit(input: SignupInput) {
     setSubmitting(true)
     setError('')
-    try { await signup(input); navigate('/', { replace: true }) } catch (reason) { setError(reason instanceof Error ? reason.message : 'The mock account could not be created. Try again.') } finally { setSubmitting(false) }
+    try { await signup(input); navigate('/', { replace: true }) } catch (reason) { setError(reason instanceof Error ? reason.message : 'The account could not be created. Try again.') } finally { setSubmitting(false) }
   }
   return <AuthLayout eyebrow="Start simply" title="Make room for better learning." text="Create your account first. We’ll ask about your learning context in a couple of short, optional-feeling steps."><SignupForm onSubmit={(input) => void submit(input)} submitting={submitting} error={error} /><p className="auth-switch">Already have an account? <Link to="/login">Sign in</Link></p></AuthLayout>
 }

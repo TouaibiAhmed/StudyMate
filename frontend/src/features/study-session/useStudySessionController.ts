@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { studySessionService } from '../../services/api-client'
 import type { AnswerRecord, StudyFeedback, StudyQuestion, StudySessionDetail } from '../../services/contracts/sessions'
 import { learningRecordService } from '../../services/api-client'
+import { classifyAiError } from '../../services/ai-error'
 
 export type SessionControllerState = {
   answer: string
@@ -42,18 +43,29 @@ export function useStudySessionController(session?: StudySessionDetail) {
   async function submitAnswer() {
     if (!session || !question || !state.answer.trim() || evaluating) return
     setEvaluating(true)
+    const currentAnswer = state.answer.trim()
+    const attemptCount = state.history.filter((record) => record.questionId === question.id).length
+
     try {
-      const feedback = await studySessionService.evaluateAnswer(session.id, question.id, state.history.filter((record) => record.questionId === question.id).length)
-      const record = { id: `${session.id}-${question.id}-${Date.now()}`, sessionId: session.id, topic: question.topic, answer: state.answer.trim(), feedback, completedAt: new Date().toISOString() }
+      const feedback = await studySessionService.evaluateAnswer(session.id, question.id, attemptCount, currentAnswer)
+      const record = {
+        id: `${session.id}-${question.id}-${Date.now()}`,
+        sessionId: session.id,
+        topic: question.topic,
+        answer: currentAnswer,
+        feedback,
+        completedAt: new Date().toISOString(),
+      }
       learningRecordService.addRecord(record)
       setState((current) => ({
         ...current,
         feedback,
         submissionError: undefined,
-        history: [...current.history, { questionId: question.id, questionTopic: question.topic, answer: current.answer.trim(), feedback }],
+        history: [...current.history, { questionId: question.id, questionTopic: question.topic, answer: currentAnswer, feedback }],
       }))
-    } catch {
-      setState((current) => ({ ...current, submissionError: 'The mock feedback could not be prepared. Please try submitting again.' }))
+    } catch (err) {
+      const { userMessage } = classifyAiError(err)
+      setState((current) => ({ ...current, submissionError: userMessage || 'Evaluation could not be completed. Please try again.' }))
     } finally {
       setEvaluating(false)
     }

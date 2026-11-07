@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowLeft, Check, ChevronLeft, ChevronRight, Clock3, Flag, ListChecks, Send, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState } from '../components/feedback/EmptyState'
 import { LoadingState } from '../components/feedback/LoadingState'
@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button'
 import { useExamController } from '../features/exams/useExamController'
 import { examService } from '../services/api-client'
 import type { ExamQuestion, PracticeExam } from '../services/contracts/exams'
+import { classifyAiError } from '../services/ai-error'
 
 export function ActiveExamPage() {
   const { examId } = useParams()
@@ -26,15 +27,75 @@ function ActiveExamWorkspace({ exam }: { exam: PracticeExam }) {
   const navigate = useNavigate()
   const controller = useExamController(exam)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const attemptId = exam.attemptId ?? exam.id
+  const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const { currentQuestion, currentIndex, answers, flagged, formatTime, remainingSeconds, answeredCount, answerQuestion, toggleFlag, goTo, isFirst, isLast } = controller
+
+  // Persist answer to server when answer changes (debounced, fire-and-forget)
+  const saveToServer = useCallback((questionId: string, answer: string, isFlagged: boolean) => {
+    if (!examService.saveAnswer) return
+    if (pendingSave.current) window.clearTimeout(pendingSave.current)
+    pendingSave.current = window.setTimeout(() => {
+      void examService.saveAnswer!(attemptId, questionId, answer, isFlagged)
+    }, 800)
+  }, [attemptId])
+
+  const handleAnswerQuestion = useCallback((answer: string) => {
+    answerQuestion(answer)
+    if (currentQuestion) saveToServer(currentQuestion.id, answer, flagged.includes(currentQuestion.id))
+  }, [answerQuestion, currentQuestion, flagged, saveToServer])
+
+  const handleGoTo = useCallback((index: number) => {
+    // Flush any pending save immediately on navigation
+    if (pendingSave.current) {
+      window.clearTimeout(pendingSave.current)
+      pendingSave.current = null
+    }
+    if (currentQuestion && examService.saveAnswer) {
+      const answer = answers[currentQuestion.id] ?? ''
+      void examService.saveAnswer(attemptId, currentQuestion.id, answer, flagged.includes(currentQuestion.id))
+    }
+    goTo(index)
+  }, [answers, attemptId, currentQuestion, flagged, goTo])
+
+  async function submitExam() {
+    setSubmitting(true)
+    setSubmitError('')
+    setConfirmOpen(false)
+    try {
+      // Flush any in-flight answer saves first
+      if (pendingSave.current) {
+        window.clearTimeout(pendingSave.current)
+        pendingSave.current = null
+      }
+      if (examService.saveAnswer) {
+        await Promise.allSettled(
+          exam.questions
+            .filter((q) => answers[q.id]?.trim())
+            .map((q) => examService.saveAnswer!(attemptId, q.id, answers[q.id], flagged.includes(q.id))),
+        )
+      }
+      if (examService.submitAttempt) {
+        await examService.submitAttempt(attemptId)
+      }
+      setSubmitted(true)
+    } catch (error) {
+      const { userMessage, retryable } = classifyAiError(error)
+      setSubmitError(retryable ? (userMessage || 'Submission failed. Check your connection and try again.') : (userMessage || 'Submission failed.'))
+      setSubmitting(false)
+    }
+  }
+
   if (!currentQuestion) return <EmptyState title="This exam has no questions" text="Return to the exams library and create another practice exam." />
-  function submitExam() { setSubmitted(true); setConfirmOpen(false) }
   if (submitted) return <ExamSubmitted exam={exam} answeredCount={answeredCount} onResults={() => navigate(`/exams/${exam.id}/results`)} />
   return <div className="active-exam-page">
-    <header className="active-exam-header"><button className="study-exit" onClick={() => setConfirmOpen(true)}><ArrowLeft size={16} /> Leave exam</button><div className="active-exam-title"><span className="eyebrow">Practice exam</span><h2>{exam.title}</h2><small>{exam.course}</small></div><div className={`exam-timer ${remainingSeconds < 300 ? 'urgent' : ''}`} role="timer" aria-label={`${formatTime} remaining`}><Clock3 size={17} /><strong>{formatTime}</strong><span>remaining</span></div></header>
-    <div className="active-exam-body"><aside className="exam-question-nav"><div className="exam-nav-heading"><div><span className="eyebrow">Questions</span><strong>{answeredCount} of {exam.questions.length} answered</strong></div><ListChecks size={18} /></div><div className="exam-question-grid">{exam.questions.map((question, index) => <button key={question.id} className={`${index === currentIndex ? 'current' : ''} ${answers[question.id] ? 'answered' : ''} ${flagged.includes(question.id) ? 'flagged' : ''}`} onClick={() => goTo(index)} aria-label={`Question ${index + 1}${answers[question.id] ? ', answered' : ', unanswered'}${flagged.includes(question.id) ? ', flagged' : ''}`}>{index + 1}{flagged.includes(question.id) && <Flag size={10} />}</button>)}</div><div className="exam-nav-legend"><span><i className="answered-dot" /> Answered</span><span><i className="flagged-dot" /> Flagged</span></div></aside><section className="active-exam-main"><div className="exam-progress-line"><span>Question {currentIndex + 1} of {exam.questions.length}</span><div><span style={{ width: `${((currentIndex + 1) / exam.questions.length) * 100}%` }} /></div></div><section className="active-question-card"><div className="active-question-meta"><span className="course-tag">{currentQuestion.concept}</span><span>{currentQuestion.type === 'multiple-choice' ? 'Multiple choice' : 'Short answer'}</span></div><h3>{currentQuestion.prompt}</h3><QuestionInput question={currentQuestion} value={answers[currentQuestion.id] ?? ''} disabled={remainingSeconds === 0} onChange={answerQuestion} /><div className="active-question-actions"><button className={`flag-button ${flagged.includes(currentQuestion.id) ? 'selected' : ''}`} onClick={toggleFlag}><Flag size={16} /> {flagged.includes(currentQuestion.id) ? 'Flagged for review' : 'Flag for review'}</button><span className="answer-state">{answers[currentQuestion.id] ? <><Check size={14} /> Answer saved locally</> : 'Not answered yet'}</span></div></section><div className="active-exam-controls"><Button variant="secondary" onClick={() => goTo(currentIndex - 1)} disabled={isFirst}><ChevronLeft size={16} /> Previous</Button>{isLast ? <Button onClick={() => setConfirmOpen(true)}><Send size={15} /> Submit exam</Button> : <Button onClick={() => goTo(currentIndex + 1)}>Next <ChevronRight size={16} /></Button>}</div>{remainingSeconds === 0 && <p className="exam-timeout" role="alert"><AlertCircle size={15} /> Time has ended. Review your answers, then submit the exam.</p>}</section></div>
-    {confirmOpen && <SubmitExamDialog exam={exam} answeredCount={answeredCount} flaggedCount={flagged.length} onCancel={() => setConfirmOpen(false)} onConfirm={submitExam} />}
+    <header className="active-exam-header"><button className="study-exit" onClick={() => setConfirmOpen(true)} disabled={submitting}><ArrowLeft size={16} /> Leave exam</button><div className="active-exam-title"><span className="eyebrow">Practice exam</span><h2>{exam.title}</h2><small>{exam.course}</small></div><div className={`exam-timer ${remainingSeconds < 300 ? 'urgent' : ''}`} role="timer" aria-label={`${formatTime} remaining`}><Clock3 size={17} /><strong>{formatTime}</strong><span>remaining</span></div></header>
+    <div className="active-exam-body"><aside className="exam-question-nav"><div className="exam-nav-heading"><div><span className="eyebrow">Questions</span><strong>{answeredCount} of {exam.questions.length} answered</strong></div><ListChecks size={18} /></div><div className="exam-question-grid">{exam.questions.map((question, index) => <button key={question.id} className={`${index === currentIndex ? 'current' : ''} ${answers[question.id] ? 'answered' : ''} ${flagged.includes(question.id) ? 'flagged' : ''}`} onClick={() => handleGoTo(index)} aria-label={`Question ${index + 1}${answers[question.id] ? ', answered' : ', unanswered'}${flagged.includes(question.id) ? ', flagged' : ''}`}>{index + 1}{flagged.includes(question.id) && <Flag size={10} />}</button>)}</div><div className="exam-nav-legend"><span><i className="answered-dot" /> Answered</span><span><i className="flagged-dot" /> Flagged</span></div></aside><section className="active-exam-main"><div className="exam-progress-line"><span>Question {currentIndex + 1} of {exam.questions.length}</span><div><span style={{ width: `${((currentIndex + 1) / exam.questions.length) * 100}%` }} /></div></div><section className="active-question-card"><div className="active-question-meta"><span className="course-tag">{currentQuestion.concept}</span><span>{currentQuestion.type === 'multiple-choice' ? 'Multiple choice' : 'Short answer'}</span></div><h3>{currentQuestion.prompt}</h3><QuestionInput question={currentQuestion} value={answers[currentQuestion.id] ?? ''} disabled={remainingSeconds === 0 || submitting} onChange={handleAnswerQuestion} /><div className="active-question-actions"><button className={`flag-button ${flagged.includes(currentQuestion.id) ? 'selected' : ''}`} onClick={toggleFlag} disabled={submitting}><Flag size={16} /> {flagged.includes(currentQuestion.id) ? 'Flagged for review' : 'Flag for review'}</button><span className="answer-state">{answers[currentQuestion.id] ? <><Check size={14} /> {examService.saveAnswer ? 'Answer saved' : 'Answer saved locally'}</> : 'Not answered yet'}</span></div></section>{submitError && <p className="exam-timeout" role="alert"><AlertCircle size={15} /> {submitError}</p>}<div className="active-exam-controls"><Button variant="secondary" onClick={() => handleGoTo(currentIndex - 1)} disabled={isFirst || submitting}><ChevronLeft size={16} /> Previous</Button>{isLast ? <Button onClick={() => setConfirmOpen(true)} disabled={submitting}>{submitting ? 'Submitting…' : <><Send size={15} /> Submit exam</>}</Button> : <Button onClick={() => handleGoTo(currentIndex + 1)} disabled={submitting}>Next <ChevronRight size={16} /></Button>}</div>{remainingSeconds === 0 && <p className="exam-timeout" role="alert"><AlertCircle size={15} /> Time has ended. Review your answers, then submit the exam.</p>}</section></div>
+    {confirmOpen && <SubmitExamDialog exam={exam} answeredCount={answeredCount} flaggedCount={flagged.length} onCancel={() => setConfirmOpen(false)} onConfirm={() => void submitExam()} />}
   </div>
 }
 

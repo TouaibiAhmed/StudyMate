@@ -61,4 +61,8 @@ export interface RoadmapService {
   listRoadmaps(): Promise<RoadmapSummary[]>
   getRoadmap(id: string): Promise<RoadmapDetail | undefined>
   createRoadmap(input: CreateRoadmapInput): Promise<RoadmapDetail>
+  getGraph?(id: string): Promise<RoadmapGraphData | undefined>
+  overrideNodeStatus?(roadmapId: string, nodeId: string, status: RoadmapTopicStatus): Promise<void>
+  startNodeSession?(roadmapId: string, nodeId: string): Promise<{ id: string; topic: string }>
+  followRoadmap?(roadmapId: string): Promise<{ userRoadmapId: string }>
 }

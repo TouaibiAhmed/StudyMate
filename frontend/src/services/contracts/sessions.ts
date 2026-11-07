@@ -32,6 +32,7 @@ export type StudyFeedback = {
   misconception?: string
   confidence: 'High' | 'Medium' | 'Low'
   nextActivity: string
+  evidence?: SessionSource[]
 }
 
 export type StudyQuestion = {
@@ -42,7 +43,7 @@ export type StudyQuestion = {
   hints: string[]
   explanation: string
   sources: SessionSource[]
-  scenarios: StudyFeedback[]
+  scenarios?: StudyFeedback[]
 }
 
 export type AnswerRecord = {
@@ -53,6 +54,14 @@ export type AnswerRecord = {
 }
 
 export interface StudySessionService {
+  startSession?(input: {
+    courseId?: string
+    conceptId?: string
+    topic?: string
+    goal?: string
+    mode?: StudyMode
+  }): Promise<StudySessionDetail>
   getSession(sessionId: string): Promise<StudySessionDetail | undefined>
-  evaluateAnswer(sessionId: string, questionId: string, attempt: number): Promise<StudyFeedback>
+  getNextActivity?(sessionId: string): Promise<StudyQuestion | undefined>
+  evaluateAnswer(sessionId: string, questionId: string, attempt: number, answer?: string): Promise<StudyFeedback>
 }

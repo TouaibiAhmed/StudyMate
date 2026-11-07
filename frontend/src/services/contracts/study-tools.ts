@@ -4,6 +4,13 @@ export type SummaryStructure = 'Key Concepts' | 'Definitions' | 'Important Point
 export type QuizDifficulty = 'Easy' | 'Medium' | 'Hard' | 'Mixed'
 export type QuizQuestionType = 'Multiple Choice' | 'True/False' | 'Short Answer'
 
+/** A source reference attached to a summary or quiz by the backend */
+export type StudyToolSource = {
+  title: string
+  page?: number
+  excerpt?: string
+}
+
 export type QuizAnswer = {
   value: string
   isCorrect?: boolean
@@ -14,8 +21,25 @@ export type QuizQuestion = {
   prompt: string
   type: QuizQuestionType
   options?: string[]
+  /** answer is populated in mock mode; absent until submitQuizAttempt() in api mode */
   answer: QuizAnswer
   topicId?: string
+}
+
+/** Server-graded result from submitQuizAttempt() */
+export type QuizAttemptResult = {
+  attemptId: string
+  score: number
+  correctCount: number
+  incorrectCount: number
+  unansweredCount: number
+  answers: Array<{
+    questionId: string
+    givenAnswer: string
+    correctAnswer: string
+    explanation?: string
+    isCorrect: boolean
+  }>
 }
 
 export type Quiz = {
@@ -30,8 +54,10 @@ export type Quiz = {
   difficulty: QuizDifficulty
   questionTypes: QuizQuestionType[]
   language: string
-  isMock: true
+  /** true in mock mode; absent/false in api mode */
+  isMock?: boolean
   questions: QuizQuestion[]
+  sources?: StudyToolSource[]
 }
 
 export type QuizResult = {
@@ -52,11 +78,13 @@ export type Summary = {
   length: SummaryLength
   language: string
   structure: SummaryStructure
-  isMock: true
+  /** true in mock mode; absent/false in api mode */
+  isMock?: boolean
   sections: Array<{
     heading: string
     points: string[]
   }>
+  sources?: StudyToolSource[]
 }
 
 export type StudyToolArtifact = {
@@ -80,4 +108,8 @@ export interface StudyToolsService {
   generateQuiz(courseId: string, options: Pick<Quiz, 'sourceDocumentIds' | 'topicIds' | 'questionCount' | 'difficulty' | 'questionTypes' | 'language'>): Promise<Quiz>
   updateQuiz(quizId: string, updates: { title?: string }): Promise<Quiz | undefined>
   deleteQuiz(quizId: string): Promise<void>
+  /** Optional: creates a server-side attempt. Only present in api mode. */
+  startQuizAttempt?(quizId: string): Promise<{ attemptId: string }>
+  /** Optional: submits answers to the server and returns graded results. Only present in api mode. */
+  submitQuizAttempt?(attemptId: string, answers: Record<string, string>): Promise<QuizAttemptResult>
 }
