@@ -3,24 +3,6 @@ import type { LoginInput, SignupInput, User } from '../types/auth.types'
 import { apiClient, setApiAccessToken } from '../../../services/http-client'
 import type { AuthResponseDto, AuthUserDto, ProfileDto, RegisterRequestDto } from '../../../services/contracts/api/auth'
 
-export function mapDomainToDomainType(domain?: string | null): string {
-  if (!domain) return 'conceptual'
-  const d = domain.toLowerCase()
-  if (d.includes('computer') || d.includes('code') || d.includes('software') || d.includes('data science') || d.includes('programming')) {
-    return 'code-based'
-  }
-  if (d.includes('math') || d.includes('physics') || d.includes('engineering') || d.includes('statistics') || d.includes('finance')) {
-    return 'quantitative'
-  }
-  if (d.includes('literature') || d.includes('philosophy') || d.includes('social science') || d.includes('politics') || d.includes('law')) {
-    return 'argumentative'
-  }
-  if (d.includes('language')) {
-    return 'language'
-  }
-  return 'conceptual'
-}
-
 function extractToken(payload: unknown): string | undefined {
   if (!payload || typeof payload !== 'object') return undefined
   const p = payload as Record<string, unknown>

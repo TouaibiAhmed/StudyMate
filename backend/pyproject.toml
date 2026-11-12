@@ -18,6 +18,7 @@ dependencies = [
     "argon2-cffi>=25.1.0",
     "email-validator>=2.3.0",
     "tzdata>=2026.6",
+    "pymupdf>=2.1",
 ]
 
 [project.optional-dependencies]
@@ -53,3 +54,7 @@ target-version = "py312"
 select = ["E", "F", "I", "B", "UP", "ASYNC"]
 # Pydantic/SQLAlchemy generics read better with Generic[...] than PEP 695 syntax.
 ignore = ["UP046"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may touch local files synchronously.
+"tests/*" = ["ASYNC230", "ASYNC240"]

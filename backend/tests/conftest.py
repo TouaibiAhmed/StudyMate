@@ -6,6 +6,9 @@ import sys
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://studymate:studymate@localhost:5433/studymate_test")
 os.environ.setdefault("APP_ENV", "test")
+import tempfile  # noqa: E402
+
+os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="studymate-test-uploads-")
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())

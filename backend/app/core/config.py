@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     llm_fast_model: str = "llama3.1:8b"
     llm_quality_model: str = "llama3.1:8b"
     llm_num_ctx: int = 4096
-    llm_keep_alive: str = "30m"
+    llm_keep_alive: str = "10m"  # how long Ollama keeps the model in RAM after a call
     llm_timeout_s: float = 300.0
     llm_max_concurrency: int = 1
     llm_structured_retries: int = 1
@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     chunk_overlap_tokens: int = 60
     retrieval_top_k: int = 3
     retrieval_candidate_k: int = 12
+    # multilingual-e5-small: on-topic questions score ~0.84-0.90, off-topic ones up to ~0.82.
+    retrieval_min_score: float = 0.83
 
     # --- Limits ----------------------------------------------------------------
     session_max_model_calls: int = 20

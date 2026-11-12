@@ -2,6 +2,7 @@ import { AlertCircle, CheckCircle2, FileText, LoaderCircle, Trash2, UploadCloud 
 import type { ChangeEvent, DragEvent } from 'react'
 import { useState } from 'react'
 import type { StudyDocument } from '../../services/contracts/documents'
+import { getDataMode } from '../../services/service-mode'
 
 type Props = {
   documents: StudyDocument[]
@@ -29,7 +30,7 @@ export function DocumentUpload({ documents, error, onFilesSelected, onRemove, on
         <span className="upload-icon"><UploadCloud size={21} /></span>
         <strong>Drop study PDFs here</strong>
         <span>or <u>choose files</u> from your device</span>
-        <small>PDF only · Files stay in this browser</small>
+        <small>{getDataMode('documents') === 'mock' ? 'PDF only · Files stay in this browser' : 'PDF only · up to 25 MB · processed on your StudyMate server'}</small>
       </label>
       {error && <p className="upload-error" role="alert"><AlertCircle size={15} />{error}</p>}
       {documents.length > 0 && <div className="document-list">{documents.map((document) => <DocumentRow document={document} key={document.id} onRemove={onRemove} onRetry={onRetry} />)}</div>}

@@ -1,0 +1,9 @@
+Course: {{ course_title }} ({{ course_subject }}, {{ course_level }})
+Document: {{ document_title }}
+
+Existing concepts (do not repeat): {{ existing | join(", ") if existing else "none" }}
+
+Outline of the document:
+<outline>
+{{ outline }}
+</outline>

@@ -78,12 +78,15 @@ async def mark_succeeded(db: AsyncSession, job_id: str, result: dict[str, Any] |
     await db.commit()
 
 
-async def mark_failed(db: AsyncSession, job: Job, error: str, *, retryable: bool) -> None:
+async def mark_failed(
+    db: AsyncSession, job: Job, error: str, *, retryable: bool, delay_s: float | None = None
+) -> None:
     """Retry with backoff while attempts remain, otherwise fail permanently."""
     if retryable and job.attempts < job.max_attempts:
+        delay = delay_s if delay_s is not None else 10 * 2 ** (job.attempts - 1)
         values = {
             "status": JobStatus.QUEUED,
-            "run_after": utcnow() + timedelta(seconds=10 * 2 ** (job.attempts - 1)),
+            "run_after": utcnow() + timedelta(seconds=delay),
             "error": error[:2000],
             "locked_at": None,
             "locked_by": None,

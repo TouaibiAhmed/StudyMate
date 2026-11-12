@@ -21,6 +21,13 @@ export function normalizeDocumentStatus(status?: string): DocumentStatus {
   return 'Queued'
 }
 
+function formatAddedAt(iso?: string): string {
+  if (!iso) return 'Recently added'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return 'Recently added'
+  return `Added ${date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`
+}
+
 export function mapDocumentDtoToDocument(dto: CourseDocumentDto): StudyDocument {
   const fileName = dto.fileName || dto.file_name || dto.filename || 'Document.pdf'
   const sizeBytes = dto.sizeBytes || dto.size_bytes || 0
@@ -33,7 +40,7 @@ export function mapDocumentDtoToDocument(dto: CourseDocumentDto): StudyDocument 
     fileName,
     sizeBytes,
     status,
-    addedAt: dto.createdAt || dto.created_at || 'Recently added',
+    addedAt: formatAddedAt(dto.createdAt || dto.created_at),
     error: dto.error ?? undefined,
     warnings: dto.warnings ?? undefined,
     pageCount: dto.pageCount ?? dto.page_count ?? undefined,

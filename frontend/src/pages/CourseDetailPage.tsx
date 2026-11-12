@@ -11,6 +11,11 @@ import type { Quiz, Summary } from '../services/contracts/study-tools'
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25 MB
 
+/** Status polls only carry processing fields; keep the document's name, size and dates. */
+function mergeDocumentStatus(current: StudyDocument, update: StudyDocument): StudyDocument {
+  return { ...current, status: update.status, error: update.error, warnings: update.warnings, pageCount: update.pageCount ?? current.pageCount }
+}
+
 export function CourseDetailPage() {
   const { courseId } = useParams()
   const navigate = useNavigate()
@@ -27,12 +32,32 @@ export function CourseDetailPage() {
   const [deletingCourse, setDeletingCourse] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
 
+  const conceptPollRef = useRef(false)
+
+  /**
+   * Concepts are extracted by the local model after a document is indexed, which can take a few
+   * minutes. Poll the course until extraction settles, then load the concept list.
+   */
   function refreshConcepts(id: string) {
-    if (courseService.getConcepts) {
-      void courseService.getConcepts(id).then((concepts) => {
-        setCourse((prev) => (prev ? { ...prev, concepts } : prev))
-      }).catch(() => {})
-    }
+    if (!courseService.getConcepts || conceptPollRef.current) return
+    conceptPollRef.current = true
+    const signal = abortControllerRef.current?.signal
+    void (async () => {
+      try {
+        for (let attempt = 0; attempt < 180 && !signal?.aborted; attempt++) {
+          const latest = await courseService.getCourse(id)
+          if (!latest || signal?.aborted) return
+          const concepts = await courseService.getConcepts!(id)
+          setCourse((prev) => (prev ? { ...prev, concepts, conceptsStatus: latest.conceptsStatus, materialCount: latest.materialCount, completedMaterials: latest.completedMaterials } : prev))
+          if (latest.conceptsStatus !== 'processing') return
+          await new Promise((resolve) => setTimeout(resolve, 5000))
+        }
+      } catch {
+        // Keep the current list; the next document update retries.
+      } finally {
+        conceptPollRef.current = false
+      }
+    })()
   }
 
   useEffect(() => {
@@ -46,13 +71,14 @@ export function CourseDetailPage() {
         setCourse(courseData)
         setDocuments(documentData)
         setLoading(false)
+        if (courseData?.conceptsStatus === 'processing') refreshConcepts(courseId)
 
         // Poll any documents already in Queued or Processing state
         documentData.forEach((doc) => {
           if ((doc.status === 'Queued' || doc.status === 'Processing') && documentService.pollDocumentStatus) {
             void documentService.pollDocumentStatus(doc.id, (updated) => {
               if (!active) return
-              setDocuments((curr) => curr.map((d) => (d.id === updated.id ? { ...d, ...updated } : d)))
+              setDocuments((curr) => curr.map((d) => (d.id === updated.id ? mergeDocumentStatus(d, updated) : d)))
               if (updated.status === 'Ready') refreshConcepts(courseId)
             }, controller.signal)
           }
@@ -88,6 +114,17 @@ export function CourseDetailPage() {
   if (!course || !courseId) return <EmptyState title="Course not found" text="This course may have been removed or the link is no longer available." action={<Link className="button button-secondary" to="/courses">Back to courses</Link>} />
   const currentCourseId = courseId
 
+  async function retryConcepts() {
+    if (!courseService.extractConcepts || !courseId) return
+    try {
+      const updated = await courseService.extractConcepts(courseId)
+      setCourse((prev) => (prev ? { ...prev, conceptsStatus: updated.conceptsStatus } : prev))
+      refreshConcepts(courseId)
+    } catch {
+      setDocumentError('Concept extraction could not be restarted. Try again in a moment.')
+    }
+  }
+
   function handleFilesSelected(files: FileList | File[]) {
     setDocumentError('')
     const fileList = Array.from(files)
@@ -120,7 +157,7 @@ export function CourseDetailPage() {
       queued.forEach((doc) => {
         if ((doc.status === 'Queued' || doc.status === 'Processing') && documentService.pollDocumentStatus) {
           void documentService.pollDocumentStatus(doc.id, (updated) => {
-            setDocuments((current) => current.map((d) => (d.id === updated.id ? { ...d, ...updated } : d)))
+            setDocuments((current) => current.map((d) => (d.id === updated.id ? mergeDocumentStatus(d, updated) : d)))
             if (updated.status === 'Ready') {
               refreshConcepts(currentCourseId)
             }
@@ -146,7 +183,7 @@ export function CourseDetailPage() {
         if ((document.status === 'Queued' || document.status === 'Processing') && documentService.pollDocumentStatus) {
           const controller = abortControllerRef.current || new AbortController()
           void documentService.pollDocumentStatus(document.id, (updated) => {
-            setDocuments((current) => current.map((d) => (d.id === updated.id ? { ...d, ...updated } : d)))
+            setDocuments((current) => current.map((d) => (d.id === updated.id ? mergeDocumentStatus(d, updated) : d)))
             if (updated.status === 'Ready') refreshConcepts(currentCourseId)
           }, controller.signal)
         }
@@ -225,7 +262,16 @@ export function CourseDetailPage() {
                   </div>
                 </button>
               ))}
-              {course.concepts.length === 0 && (
+              {course.conceptsStatus === 'processing' && (
+                <p className="documents-empty" role="status">Identifying key concepts from your material… This runs on a local model and can take a few minutes.</p>
+              )}
+              {course.conceptsStatus === 'failed' && (
+                <div className="documents-empty" role="status">
+                  <p>Key concepts could not be identified this time. The local model may have been unavailable.</p>
+                  {courseService.extractConcepts && <button type="button" className="button button-secondary" onClick={() => void retryConcepts()}>Try again</button>}
+                </div>
+              )}
+              {course.concepts.length === 0 && course.conceptsStatus !== 'processing' && course.conceptsStatus !== 'failed' && (
                 <p className="documents-empty">No course concepts extracted yet. Upload a PDF lecture or note to discover key concepts.</p>
               )}
             </div>

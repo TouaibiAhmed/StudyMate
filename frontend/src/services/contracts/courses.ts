@@ -14,13 +14,15 @@ export type CourseSummary = {
   color: 'forest' | 'coral' | 'sage' | 'lilac'
   icon: string
   domain?: string
+  /** Concept extraction state of the course's documents (api mode). */
+  conceptsStatus?: 'idle' | 'processing' | 'ready' | 'failed'
 }
 
 export type CourseConcept = {
   id: string
   title: string
   progress: number
-  status: 'Strong' | 'In progress' | 'Needs review'
+  status: 'Strong' | 'In progress' | 'Needs review' | 'Not started'
 }
 
 export type CourseStudySession = {
@@ -50,4 +52,6 @@ export interface CourseService {
   getCourse(courseId: string): Promise<CourseDetail | undefined>
   deleteCourse(courseId: string): Promise<void>
   getConcepts?(courseId: string): Promise<CourseConcept[]>
+  /** Re-run concept extraction over the course's ready documents (api mode). */
+  extractConcepts?(courseId: string): Promise<CourseSummary>
 }

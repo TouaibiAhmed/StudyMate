@@ -51,7 +51,7 @@ class Worker:
             result = await handler(JobContext(job=job, sessions=SessionFactory))
         except RetryableJobError as exc:
             async with SessionFactory() as db:
-                await queue.mark_failed(db, job, str(exc), retryable=True)
+                await queue.mark_failed(db, job, str(exc), retryable=True, delay_s=exc.delay_s)
             log.warning("Job %s failed (retryable): %s", job.id, exc)
         except Exception as exc:  # noqa: BLE001 - a handler bug must not kill the worker
             async with SessionFactory() as db:

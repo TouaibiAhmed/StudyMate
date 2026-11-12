@@ -40,6 +40,8 @@ VITE_API_BASE_URL=
 VITE_DATA_MODE=mock
 VITE_AUTH_DATA_MODE=api
 VITE_PROFILE_DATA_MODE=api
+VITE_COURSES_DATA_MODE=api
+VITE_DOCUMENTS_DATA_MODE=api
 ```
 
 With `VITE_API_BASE_URL` empty, the Vite dev server proxies `/api/*` to `localhost:8000`, so the
@@ -48,7 +50,16 @@ session cookie stays same-origin.
 | Feature | Status |
 |---|---|
 | auth, profile (incl. study preferences) | api |
+| courses, documents (upload, processing, concepts) | api |
 | everything else | mock (connected in later steps) |
+
+Uploads are processed by the **worker**: keep it running, or documents stay "Queued".
+
+### GPU
+
+Ollama only uses the GPU if it detects it at startup. Check `%LOCALAPPDATA%\Ollama\server.log`
+for a line `msg="inference compute" ... library=cuda`. If it says `library=cpu`, the model runs on
+the CPU only (several times slower); updating the NVIDIA driver usually fixes detection.
 
 ## Tests
 

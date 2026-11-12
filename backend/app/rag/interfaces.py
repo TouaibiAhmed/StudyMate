@@ -24,8 +24,31 @@ from app.rag.evidence import EvidenceSet
 @dataclass(frozen=True)
 class ExtractedPage:
     number: int  # 1-based
-    text: str
-    low_text: bool
+    paragraphs: list[str]  # reading order, whitespace-normalized
+    headings: list[str] = field(default_factory=list)  # lines set in a larger font than body text
+    low_text: bool = False
+
+    @property
+    def text(self) -> str:
+        return "\n\n".join(self.paragraphs)
+
+
+@dataclass(frozen=True)
+class OutlineEntry:
+    title: str
+    page: int
+    level: int = 1
+
+
+@dataclass
+class PdfExtraction:
+    pages: list[ExtractedPage]
+    outline: list[OutlineEntry]
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def page_count(self) -> int:
+        return len(self.pages)
 
 
 @dataclass(frozen=True)
@@ -52,13 +75,16 @@ class RetrievalScope:
 class RetrievalParams:
     top_k: int = 3
     candidate_k: int = 12
-    min_score: float = 0.25
+    # multilingual-e5 cosine similarities are compressed (unrelated text still scores ~0.7-0.8),
+    # so the relevance floor is high. See Settings.retrieval_min_score and
+    # tests/test_courses_documents.py for the calibration.
+    min_score: float = 0.83
     keyword_weight: float = 0.3
     exclude_chunk_ids: list[str] = field(default_factory=list)
 
 
 class PdfExtractor(Protocol):
-    def extract(self, path: str) -> list[ExtractedPage]: ...
+    def extract(self, path: str) -> PdfExtraction: ...
 
 
 class Chunker(Protocol):

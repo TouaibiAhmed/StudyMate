@@ -69,7 +69,7 @@ Rules that keep the layers honest:
 | Concurrency | Per-process semaphore (default 1). Ollama queues across processes. |
 | Prompt budget | `num_ctx` 4096, top-3 excerpts of ~350 tokens, capped `max_tokens` per role. Prompt reading is the slow part on this hardware. |
 | Traceability | Every call writes `ai_calls`: role, prompt version, model, tier, status, latency, tokens, source chunk ids. No prompt text or student answers. |
-| Failures | Typed errors (`unavailable`, `timeout`, `model_missing`, `invalid_output`). Background jobs retry transient ones with backoff; API calls return a safe 503. |
+| Failures | Typed errors (`unavailable`, `timeout`, `model_missing`, `invalid_output`). Background jobs retry transient ones with backoff (minutes when the runtime is unreachable, so an Ollama restart is survived); API calls return a safe 503. |
 
 ## 4. Agents (AI roles)
 
@@ -100,6 +100,16 @@ paragraph-aware chunks (~350 tokens, 60 overlap, page ranges kept) → embedding
 **Retrieval:** embed query (e5 `query:`) → cosine search on candidate_k=12 filtered by
 `user_id` + `course_id` (+ optional documents) → hybrid score with full-text rank → drop near
 duplicates → top_k=3 → label `E1..En`.
+
+**Concepts from the outline:** concept extraction reads the document's bookmarks or detected
+headings (or, without structure, the opening of ~15 passages spread over the document), not the
+full text. One short model call per document instead of one per chunk batch: about 2 minutes on
+CPU instead of ~10. New concepts are deduplicated by normalized name, embedded, and linked to the
+3 chunks that cover them best (their pages become the concept's source references).
+
+**Calibration:** `multilingual-e5-small` similarities are compressed (off-topic text still scores
+~0.7–0.82), so `RETRIEVAL_MIN_SCORE` is 0.83; on-topic questions score ~0.84–0.90. Re-check this
+on real course material when the embedding model changes.
 
 **Grounding rules:**
 * Excerpts are wrapped as untrusted reference text (prompt-injection defence).

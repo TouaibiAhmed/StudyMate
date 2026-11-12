@@ -1,7 +1,6 @@
 import type { CourseConcept, CourseDetail, CourseService, CourseSubject, CourseSummary, CreateCourseInput } from '../contracts/courses'
 import type { CourseConceptDto, CourseDto, CreateCourseRequestDto } from '../contracts/api/courses'
 import { apiClient } from '../http-client'
-import { mapDomainToDomainType } from '../../features/auth/services/api-auth.service'
 
 function pageItems<T>(value: T[] | { items: T[] } | { courses: T[] } | undefined): T[] {
   if (!value) return []
@@ -29,8 +28,9 @@ function determineIcon(subject: string): string {
 }
 
 function normalizeConceptStatus(rawStatus?: string): CourseConcept['status'] {
-  if (!rawStatus) return 'In progress'
+  if (!rawStatus) return 'Not started'
   const s = rawStatus.toLowerCase()
+  if (s.includes('not_enough_evidence') || s.includes('not_started')) return 'Not started'
   if (s.includes('strong') || s.includes('mastered') || s.includes('good_evidence')) return 'Strong'
   if (s.includes('need') || s.includes('review') || s.includes('weak') || s.includes('practice')) return 'Needs review'
   return 'In progress'
@@ -55,6 +55,7 @@ export function mapCourseDtoToSummary(dto: CourseDto): CourseSummary {
     color,
     icon,
     domain: dto.domain ?? undefined,
+    conceptsStatus: dto.conceptsStatus,
   }
 }
 
@@ -74,15 +75,13 @@ export const apiCourseService: CourseService = {
   },
 
   async createCourse(input: CreateCourseInput): Promise<CourseSummary> {
-    const domainType = mapDomainToDomainType(input.domain || input.subject)
+    // The backend derives the domain type from subject/domain.
     const payload: CreateCourseRequestDto = {
       title: input.title.trim(),
       subject: input.subject,
       level: input.level,
       description: input.description.trim(),
       domain: input.domain,
-      domain_type: domainType,
-      domainType,
     }
 
     const response = await apiClient.post<CourseDto>('/api/courses', payload)
@@ -118,6 +117,11 @@ export const apiCourseService: CourseService = {
 
   async deleteCourse(courseId: string): Promise<void> {
     await apiClient.delete(`/api/courses/${courseId}`)
+  },
+
+  async extractConcepts(courseId: string): Promise<CourseSummary> {
+    const response = await apiClient.post<CourseDto>(`/api/courses/${courseId}/concepts/extract`)
+    return mapCourseDtoToSummary(response.data)
   },
 
   async getConcepts(courseId: string): Promise<CourseConcept[]> {

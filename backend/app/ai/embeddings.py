@@ -35,9 +35,15 @@ class SentenceTransformerEmbeddings:
     async def _load(self):
         async with self._lock:
             if self._st is None:
+                from huggingface_hub import try_to_load_from_cache
                 from sentence_transformers import SentenceTransformer  # heavy import; load lazily
 
-                self._st = await asyncio.to_thread(SentenceTransformer, self.model, device="cpu")
+                # Use the local cache without contacting Hugging Face (works offline, no telemetry);
+                # only the very first run on a machine downloads the model.
+                cached = isinstance(try_to_load_from_cache(self.model, "config.json"), str)
+                self._st = await asyncio.to_thread(
+                    SentenceTransformer, self.model, device="cpu", local_files_only=cached
+                )
         return self._st
 
     async def _encode(self, texts: list[str]) -> list[list[float]]:

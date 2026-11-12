@@ -6,6 +6,7 @@ Create Date: ${create_date}
 """
 from collections.abc import Sequence
 
+import pgvector.sqlalchemy  # noqa: F401 - vector columns
 import sqlalchemy as sa
 from alembic import op
 ${imports if imports else ""}

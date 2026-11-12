@@ -20,7 +20,15 @@ from app.jobs.models import Job
 
 
 class RetryableJobError(Exception):
-    """Raise for transient failures (model timeout, Ollama down) so the job is retried."""
+    """Raise for transient failures (model timeout, Ollama down) so the job is retried.
+
+    `delay_s` overrides the default exponential backoff, e.g. to wait longer for a model runtime
+    that is restarting.
+    """
+
+    def __init__(self, message: str, *, delay_s: float | None = None):
+        super().__init__(message)
+        self.delay_s = delay_s
 
 
 @dataclass

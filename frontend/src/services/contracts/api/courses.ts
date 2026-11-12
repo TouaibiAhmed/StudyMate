@@ -10,6 +10,7 @@ export type CourseDto = {
   domain_type?: string | null
   domainType?: string | null
   status?: ApiStatus
+  conceptsStatus?: 'idle' | 'processing' | 'ready' | 'failed'
   created_at?: IsoTimestamp
   createdAt?: IsoTimestamp
   updated_at?: IsoTimestamp
