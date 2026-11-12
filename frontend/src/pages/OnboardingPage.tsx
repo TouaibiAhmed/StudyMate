@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
+import { profileService } from '../services/api-client'
 
 export type MockStudentProfile = {
   fieldOfStudy: string
@@ -23,6 +24,7 @@ export function OnboardingPage() {
   const [preferredLanguage, setPreferredLanguage] = useState('')
   const [targetRole, setTargetRole] = useState('')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   function continueToNext(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -39,15 +41,38 @@ export function OnboardingPage() {
       setStep((current) => current + 1)
       return
     }
-    const profile: MockStudentProfile = {
-      fieldOfStudy: fieldOfStudy.trim(),
-      level,
-      preferredLanguage: preferredLanguage.trim() || undefined,
-      targetRole: targetRole.trim() || undefined,
-      completedAt: new Date().toISOString(),
+    void saveOnboarding()
+  }
+
+  async function saveOnboarding() {
+    setSaving(true)
+    try {
+      const current = await profileService.getProfile()
+      const response = await profileService.saveProfile({
+        ...current,
+        fieldOfStudy: fieldOfStudy.trim(),
+        level,
+        preferredLanguage: preferredLanguage.trim() || current.preferredLanguage,
+        targetRole: targetRole.trim() || current.targetRole,
+      })
+      if (!response.success) {
+        setError(response.message)
+        return
+      }
+      const profile: MockStudentProfile = {
+        fieldOfStudy: fieldOfStudy.trim(),
+        level,
+        preferredLanguage: preferredLanguage.trim() || undefined,
+        targetRole: targetRole.trim() || undefined,
+        completedAt: new Date().toISOString(),
+      }
+      localStorage.setItem('studymate:student-profile', JSON.stringify(profile))
+      navigate('/', { replace: true })
+    } catch {
+      setError('Your answers could not be saved. Try again.')
+    } finally {
+      setSaving(false)
     }
-    localStorage.setItem('studymate:student-profile', JSON.stringify(profile))
-    navigate('/', { replace: true })
   }
 
   function goBack() {
@@ -59,7 +84,7 @@ export function OnboardingPage() {
     <div className="onboarding-brand"><div className="brand-mark"><Sparkles size={17} /></div><span>Study<span className="brand-accent">mate</span></span></div>
     <div className="onboarding-layout">
       <aside className="onboarding-aside"><span className="eyebrow">A gentler start</span><h1>Make the studio feel like yours.</h1><p>A few details help us shape useful study paths. You can change your direction later.</p><div className="onboarding-aside-note"><Compass size={18} /><span>No account or commitment needed for this mock setup.</span></div></aside>
-      <section className="onboarding-card" aria-labelledby="onboarding-title"><div className="onboarding-progress" aria-label={`Step ${step} of 3`}><div className="onboarding-progress-label"><span>Getting started</span><strong>0{step} / 03</strong></div><div className="onboarding-progress-track"><span style={{ width: `${(step / 3) * 100}%` }} /></div></div><form onSubmit={continueToNext}><div className="onboarding-heading"><span className="eyebrow">Step {step} of 3</span><h2 id="onboarding-title">{step === 1 ? 'What are you curious about?' : step === 2 ? 'Where are you in your journey?' : 'What would make this useful?'}</h2><p>{step === 1 ? 'Choose a suggestion or write your own field of study.' : step === 2 ? 'This helps us keep examples and pacing relevant.' : 'These details are optional and can guide your first roadmap.'}</p></div>{step === 1 && <FieldStep value={fieldOfStudy} onChange={setFieldOfStudy} />}{step === 2 && <LevelStep value={level} onChange={setLevel} />}{step === 3 && <PreferenceStep language={preferredLanguage} role={targetRole} onLanguageChange={setPreferredLanguage} onRoleChange={setTargetRole} />}{error && <p className="form-error onboarding-error" role="alert">{error}</p>}<div className="onboarding-actions">{step > 1 ? <Button type="button" variant="ghost" onClick={goBack}><ArrowLeft size={15} /> Back</Button> : <span />}{step === 3 && <button type="button" className="onboarding-skip" onClick={() => { setPreferredLanguage(''); setTargetRole('') }}>Skip optional fields</button>}<Button type="submit">{step === 3 ? 'Enter your studio' : 'Continue'} <ArrowRight size={15} /></Button></div></form><p className="onboarding-footnote">You can update these preferences anytime from your profile.</p></section>
+      <section className="onboarding-card" aria-labelledby="onboarding-title"><div className="onboarding-progress" aria-label={`Step ${step} of 3`}><div className="onboarding-progress-label"><span>Getting started</span><strong>0{step} / 03</strong></div><div className="onboarding-progress-track"><span style={{ width: `${(step / 3) * 100}%` }} /></div></div><form onSubmit={continueToNext}><div className="onboarding-heading"><span className="eyebrow">Step {step} of 3</span><h2 id="onboarding-title">{step === 1 ? 'What are you curious about?' : step === 2 ? 'Where are you in your journey?' : 'What would make this useful?'}</h2><p>{step === 1 ? 'Choose a suggestion or write your own field of study.' : step === 2 ? 'This helps us keep examples and pacing relevant.' : 'These details are optional and can guide your first roadmap.'}</p></div>{step === 1 && <FieldStep value={fieldOfStudy} onChange={setFieldOfStudy} />}{step === 2 && <LevelStep value={level} onChange={setLevel} />}{step === 3 && <PreferenceStep language={preferredLanguage} role={targetRole} onLanguageChange={setPreferredLanguage} onRoleChange={setTargetRole} />}{error && <p className="form-error onboarding-error" role="alert">{error}</p>}<div className="onboarding-actions">{step > 1 ? <Button type="button" variant="ghost" onClick={goBack}><ArrowLeft size={15} /> Back</Button> : <span />}{step === 3 && <button type="button" className="onboarding-skip" onClick={() => { setPreferredLanguage(''); setTargetRole('') }}>Skip optional fields</button>}<Button type="submit" disabled={saving}>{step === 3 ? (saving ? 'Saving…' : 'Enter your studio') : 'Continue'} <ArrowRight size={15} /></Button></div></form><p className="onboarding-footnote">You can update these preferences anytime from your profile.</p></section>
     </div>
   </main>
 }

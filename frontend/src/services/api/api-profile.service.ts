@@ -1,9 +1,7 @@
 import type { PreferencesService, SaveResponse, StudentProfile, StudyPreferences } from '../contracts/preferences'
 import type { ProfileDto, UpdateProfileRequestDto } from '../contracts/api/auth'
 import { apiClient } from '../http-client'
-import { mapDomainToDomainType } from '../../features/auth/services/api-auth.service'
-
-const LOCAL_PREFS_KEY = 'studymate:api-study-preferences'
+import { classifyAiError } from '../ai-error'
 
 function mapDtoToProfile(dto: ProfileDto): StudentProfile {
   return {
@@ -17,6 +15,14 @@ function mapDtoToProfile(dto: ProfileDto): StudentProfile {
   }
 }
 
+function notifyProfileUpdated() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('studymate:profile-updated'))
+}
+
+function failure(error: unknown, fallback: string): SaveResponse {
+  return { success: false, message: classifyAiError(error).userMessage || fallback }
+}
+
 export const apiProfileService: PreferencesService = {
   async getProfile(): Promise<StudentProfile> {
     const response = await apiClient.get<ProfileDto>('/api/profile')
@@ -24,90 +30,38 @@ export const apiProfileService: PreferencesService = {
   },
 
   async saveProfile(profile: StudentProfile): Promise<SaveResponse> {
-    const domainType = mapDomainToDomainType(profile.domain)
+    // The backend recomputes domainType from domain/specialization/fieldOfStudy.
     const payload: UpdateProfileRequestDto = {
-      field_of_study: profile.fieldOfStudy.trim(),
       fieldOfStudy: profile.fieldOfStudy.trim(),
       domain: profile.domain || null,
-      domain_type: domainType,
-      domainType,
       specialization: profile.specialization || null,
       level: profile.level,
-      academic_level: profile.level,
-      language: profile.preferredLanguage.trim(),
-      preferred_language: profile.preferredLanguage.trim(),
-      preferredLanguage: profile.preferredLanguage.trim(),
-      time_zone: profile.timeZone,
+      preferredLanguage: profile.preferredLanguage.trim() || 'English',
       timeZone: profile.timeZone,
-      target_role: profile.targetRole?.trim() || null,
       targetRole: profile.targetRole?.trim() || null,
     }
-
-    const response = await apiClient.patch<ProfileDto>('/api/profile', payload)
-    
-    // Notify shell & other listeners that profile has updated
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('studymate:profile-updated'))
+    try {
+      await apiClient.patch<ProfileDto>('/api/profile', payload)
+    } catch (error) {
+      return failure(error, 'Your profile could not be saved. Try again.')
     }
-
-    return {
-      success: Boolean(response.data),
-      message: 'Your profile was saved.',
-    }
+    notifyProfileUpdated()
+    return { success: true, message: 'Your profile was saved.' }
   },
 
   async getStudyPreferences(): Promise<StudyPreferences> {
-    let hideStreaks = false
-    try {
-      const response = await apiClient.get<ProfileDto>('/api/profile')
-      const dto = response.data
-      if (dto.showStreaks === false || dto.show_streaks === false) {
-        hideStreaks = true
-      }
-    } catch {
-      // Continue with default
-    }
-
-    let cached: Partial<StudyPreferences> = {}
-    try {
-      const stored = localStorage.getItem(LOCAL_PREFS_KEY)
-      if (stored) cached = JSON.parse(stored) as Partial<StudyPreferences>
-    } catch {
-      // Ignore storage errors
-    }
-
-    return {
-      hideStreaks,
-      sessionLength: cached.sessionLength || '30 minutes',
-      weeklyGoal: cached.weeklyGoal || 4,
-      reminderTime: cached.reminderTime || '18:00',
-    }
+    const response = await apiClient.get<StudyPreferences>('/api/preferences')
+    return response.data
   },
 
   async saveStudyPreferences(preferences: StudyPreferences): Promise<SaveResponse> {
     try {
-      await apiClient.patch<ProfileDto>('/api/profile', {
-        show_streaks: !preferences.hideStreaks,
-        showStreaks: !preferences.hideStreaks,
-      })
-    } catch {
-      // Keep going to persist UI preference locally
+      await apiClient.put<StudyPreferences>('/api/preferences', preferences)
+    } catch (error) {
+      return failure(error, 'Your study preferences could not be saved. Try again.')
     }
-
-    try {
-      localStorage.setItem(LOCAL_PREFS_KEY, JSON.stringify(preferences))
-    } catch {
-      // Ignore storage errors
-    }
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('studymate:profile-updated'))
-    }
-
-    return {
-      success: true,
-      message: 'Your study preferences were saved.',
-    }
+    notifyProfileUpdated()
+    return { success: true, message: 'Your study preferences were saved.' }
   },
 }
 

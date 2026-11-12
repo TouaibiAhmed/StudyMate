@@ -5,12 +5,32 @@ import { LoadingState } from '../components/feedback/LoadingState'
 import { Button } from '../components/ui/Button'
 import { preferencesService } from '../services/api-client'
 import type { StudentProfile } from '../services/contracts/preferences'
-import { studyDomains } from '../features/auth/config/study-domains'
+import { academicLevels, studyDomains } from '../features/auth/config/study-domains'
+import { useAuth } from '../features/auth/hooks/useAuth'
+import { getDataMode } from '../services/service-mode'
 
-const levels = ['High school student', 'University student', 'Graduate student', 'Working professional', 'Career changer']
-const timeZones = ['Europe/Paris', 'Europe/London', 'America/New_York', 'Asia/Dubai', 'Asia/Tokyo']
+const isMockProfile = getDataMode('profile') === 'mock'
+const fallbackTimeZones = ['UTC', 'Europe/Paris', 'Europe/London', 'Africa/Tunis', 'America/New_York', 'Asia/Dubai', 'Asia/Tokyo']
+const allTimeZones: string[] = (() => {
+  try {
+    return (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.('timeZone') ?? fallbackTimeZones
+  } catch {
+    return fallbackTimeZones
+  }
+})()
+
+/** Keep the saved value selectable even when it is not in the suggested list. */
+function withCurrent(options: string[], current?: string) {
+  return current && !options.includes(current) ? [current, ...options] : options
+}
+
+function initials(name?: string) {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean)
+  return (parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'ST')
+}
 
 export function ProfilePage() {
+  const { user } = useAuth()
   const [profile, setProfile] = useState<StudentProfile>()
   const [draft, setDraft] = useState<StudentProfile>()
   const [loading, setLoading] = useState(true)
@@ -62,7 +82,7 @@ export function ProfilePage() {
     setFeedback(undefined)
     setFieldError('')
   }
-  return <div className="page-stack settings-page"><div className="page-intro"><div><span className="eyebrow">Account</span><h2>Your profile</h2><p>Keep your learning context current. These preferences stay separate from your courses and progress.</p></div></div><section className="panel profile-card"><div className="profile-header"><div className="profile-avatar">AM<button aria-label="Change avatar" type="button"><Camera size={15} /></button></div><div><h3>Alex Morgan</h3><p>Learning enthusiast · Mock student profile</p></div></div><div className="settings-form profile-settings-form"><label>Main domain<select value={currentDraft.domain ?? ''} onChange={(event) => changeDomain(event.target.value)}>{studyDomains.map((domain) => <option key={domain.label}>{domain.label}</option>)}</select></label><label>Specialization{selectedDomain?.fields.length ? <select value={currentDraft.specialization ?? ''} onChange={(event) => update('specialization', event.target.value)}>{selectedDomain.fields.map((field) => <option key={field}>{field}</option>)}</select> : <input value={currentDraft.specialization ?? ''} onChange={(event) => update('specialization', event.target.value)} placeholder="Enter your field" />}</label><label>Field of study<input value={currentDraft.fieldOfStudy} onChange={(event) => update('fieldOfStudy', event.target.value)} placeholder="e.g. Computer science" /></label><label>Current level<select value={currentDraft.level} onChange={(event) => update('level', event.target.value)}>{levels.map((level) => <option key={level}>{level}</option>)}</select></label><label>Preferred language<input value={currentDraft.preferredLanguage} onChange={(event) => update('preferredLanguage', event.target.value)} placeholder="e.g. English" /></label><label>Time zone<select value={currentDraft.timeZone} onChange={(event) => update('timeZone', event.target.value)}>{timeZones.map((zone) => <option key={zone}>{zone}</option>)}</select></label><label className="settings-full">Target role <span className="optional-label">Optional</span><input value={currentDraft.targetRole ?? ''} onChange={(event) => update('targetRole', event.target.value)} placeholder="e.g. Data analyst" /></label></div>{fieldError && <p className="form-error" role="alert">{fieldError}</p>}<SettingsActions changed={changed} saving={saving} feedback={feedback} onCancel={cancel} onSave={() => void saveProfile()} /></section><section className="settings-security"><ShieldCheck size={17} /><div><strong>Mock account privacy</strong><p>No password, authentication, or account deletion actions are connected in this frontend-only experience.</p></div></section></div>
+  return <div className="page-stack settings-page"><div className="page-intro"><div><span className="eyebrow">Account</span><h2>Your profile</h2><p>Keep your learning context current. These preferences stay separate from your courses and progress.</p></div></div><section className="panel profile-card"><div className="profile-header"><div className="profile-avatar">{initials(user?.name)}<button aria-label="Change avatar" type="button"><Camera size={15} /></button></div><div><h3>{user?.name ?? 'Student'}</h3><p>{[currentDraft.fieldOfStudy, currentDraft.level].filter(Boolean).join(' · ') || (isMockProfile ? 'Mock student profile' : user?.email)}</p></div></div><div className="settings-form profile-settings-form"><label>Main domain<select value={currentDraft.domain ?? ''} onChange={(event) => changeDomain(event.target.value)}>{studyDomains.map((domain) => <option key={domain.label}>{domain.label}</option>)}</select></label><label>Specialization{selectedDomain?.fields.length ? <select value={currentDraft.specialization ?? ''} onChange={(event) => update('specialization', event.target.value)}>{selectedDomain.fields.map((field) => <option key={field}>{field}</option>)}</select> : <input value={currentDraft.specialization ?? ''} onChange={(event) => update('specialization', event.target.value)} placeholder="Enter your field" />}</label><label>Field of study<input value={currentDraft.fieldOfStudy} onChange={(event) => update('fieldOfStudy', event.target.value)} placeholder="e.g. Computer science" /></label><label>Current level<select value={currentDraft.level} onChange={(event) => update('level', event.target.value)}>{withCurrent(academicLevels, currentDraft.level).map((level) => <option key={level}>{level}</option>)}</select></label><label>Preferred language<input value={currentDraft.preferredLanguage} onChange={(event) => update('preferredLanguage', event.target.value)} placeholder="e.g. English" /></label><label>Time zone<select value={currentDraft.timeZone} onChange={(event) => update('timeZone', event.target.value)}>{withCurrent(allTimeZones, currentDraft.timeZone).map((zone) => <option key={zone}>{zone}</option>)}</select></label><label className="settings-full">Target role <span className="optional-label">Optional</span><input value={currentDraft.targetRole ?? ''} onChange={(event) => update('targetRole', event.target.value)} placeholder="e.g. Data analyst" /></label></div>{fieldError && <p className="form-error" role="alert">{fieldError}</p>}<SettingsActions changed={changed} saving={saving} feedback={feedback} onCancel={cancel} onSave={() => void saveProfile()} /></section>{isMockProfile && <section className="settings-security"><ShieldCheck size={17} /><div><strong>Mock account privacy</strong><p>No password, authentication, or account deletion actions are connected in this frontend-only experience.</p></div></section>}</div>
 }
 
 function SettingsActions({ changed, saving, feedback, onCancel, onSave }: { changed: boolean; saving: boolean; feedback?: { success: boolean; message: string }; onCancel: () => void; onSave: () => void }) {

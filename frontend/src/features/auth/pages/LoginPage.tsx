@@ -4,6 +4,7 @@ import { LoginForm } from '../components/LoginForm'
 import { useAuth } from '../hooks/useAuth'
 import type { LoginInput } from '../types/auth.types'
 import { useState } from 'react'
+import { getDataMode } from '../../../services/service-mode'
 
 export function LoginPage() {
   const { status, login } = useAuth()
@@ -17,5 +18,5 @@ export function LoginPage() {
     setError('')
     try { await login(input); navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true }) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Sign in failed. Check your credentials and try again.') } finally { setSubmitting(false) }
   }
-  return <AuthLayout eyebrow="Welcome back" title="Return to your study space." text="Sign in to pick up your courses, sessions, and progress."><LoginForm onSubmit={(input) => void submit(input)} submitting={submitting} error={error} /><p className="auth-switch">New to StudyMate? <Link to="/signup">Create a mock account</Link></p></AuthLayout>
+  return <AuthLayout eyebrow="Welcome back" title="Return to your study space." text="Sign in to pick up your courses, sessions, and progress."><LoginForm onSubmit={(input) => void submit(input)} submitting={submitting} error={error} /><p className="auth-switch">New to StudyMate? <Link to="/signup">{getDataMode('auth') === 'mock' ? 'Create a mock account' : 'Create an account'}</Link></p></AuthLayout>
 }

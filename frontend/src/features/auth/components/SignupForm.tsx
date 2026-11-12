@@ -1,8 +1,11 @@
 import { ArrowLeft, ArrowRight, Check, Eye, EyeOff } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
+import { getDataMode } from '../../../services/service-mode'
 import { academicLevels, studyDomains } from '../config/study-domains'
 import type { SignupInput } from '../types/auth.types'
+
+const isMockAuth = getDataMode('auth') === 'mock'
 
 type Props = { onSubmit: (input: SignupInput) => void; submitting: boolean; error?: string }
 
@@ -29,7 +32,7 @@ export function SignupForm({ onSubmit, submitting, error }: Props) {
     if (step === 1) {
       if (name.trim().length < 2) return 'Tell us your first name so the studio feels personal.'
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Enter a valid email address.'
-      if (password.length < 6) return 'Use at least 6 characters for your password.'
+      if (password.length < 8) return 'Use at least 8 characters for your password.'
       if (password !== confirmation) return 'Passwords do not match. Check both password fields.'
     }
     if (step === 2 && (!level || !domain || !field)) return 'Choose your academic level, domain, and field of study.'
@@ -75,7 +78,7 @@ export function SignupForm({ onSubmit, submitting, error }: Props) {
       <label htmlFor="signup-name">First name<input id="signup-name" type="text" autoComplete="given-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Alex" /></label>
       <label htmlFor="signup-email">Email address<input id="signup-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
       <div className="auth-form-grid">
-        <div><label htmlFor="signup-password">Password</label><div className="auth-input-wrap"><input id="signup-password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" /><button className="auth-input-action" type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
+        <div><label htmlFor="signup-password">Password</label><div className="auth-input-wrap"><input id="signup-password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" /><button className="auth-input-action" type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
         <div><label htmlFor="signup-confirmation">Confirm password</label><div className="auth-input-wrap"><input id="signup-confirmation" type={showConfirmation ? 'text' : 'password'} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Repeat password" /><button className="auth-input-action" type="button" onClick={() => setShowConfirmation((visible) => !visible)} aria-label={showConfirmation ? 'Hide confirmation password' : 'Show confirmation password'}>{showConfirmation ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
       </div>
     </section>}
@@ -101,6 +104,6 @@ export function SignupForm({ onSubmit, submitting, error }: Props) {
       {step > 1 ? <button className="button button-ghost" type="button" onClick={goBack} disabled={submitting}><ArrowLeft size={15} /> Back</button> : <span />}
       <button className="button auth-submit" type="submit" disabled={submitting}>{submitting ? <><span className="auth-spinner" aria-hidden="true" /> Creating account…</> : <>{step === 3 ? 'Create my study space' : 'Continue'} <ArrowRight size={16} /></>}</button>
     </div>
-    <p className="auth-demo-note">Mock account only. No password is stored in your browser.</p>
+    {isMockAuth && <p className="auth-demo-note">Mock account only. No password is stored in your browser.</p>}
   </form>
 }

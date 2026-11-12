@@ -83,29 +83,20 @@ export const apiAuthService: AuthService = {
   },
 
   async signup(input: SignupInput): Promise<User> {
-    const domainType = mapDomainToDomainType(input.domain)
     const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
     const fieldOfStudy = input.specialization?.trim() || input.domain?.trim() || ''
 
+    // The backend derives domainType from domain/specialization, so it is not sent.
     const payload: RegisterRequestDto = {
       email: input.email.trim().toLowerCase(),
       password: input.password,
       name: input.name.trim(),
-      display_name: input.name.trim(),
-      field_of_study: fieldOfStudy,
       fieldOfStudy,
       domain: input.domain,
-      domain_type: domainType,
-      domainType,
       specialization: input.specialization,
       level: input.level,
-      academic_level: input.level,
-      language: input.preferredLanguage?.trim() || 'English',
-      preferred_language: input.preferredLanguage?.trim() || 'English',
       preferredLanguage: input.preferredLanguage?.trim() || 'English',
-      time_zone: userTimeZone,
       timeZone: userTimeZone,
-      target_role: input.targetRole?.trim() || null,
       targetRole: input.targetRole?.trim() || null,
     }
 
@@ -129,7 +120,6 @@ export const apiAuthService: AuthService = {
           userId: data?.user?.id,
           fieldOfStudy,
           domain: input.domain,
-          domainType,
           specialization: input.specialization,
           level: input.level,
           preferredLanguage: input.preferredLanguage?.trim() || 'English',

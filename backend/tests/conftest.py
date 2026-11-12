@@ -32,3 +32,31 @@ async def db_ready():
         pytest.skip(f"test database unavailable: {exc}")
     yield SessionFactory
     await engine.dispose()
+
+
+@pytest.fixture
+async def api(db_ready):
+    """HTTP client against the real app (cookies persist between requests, like a browser)."""
+    import httpx
+
+    from app.main import app
+    from app.modules.auth.security import login_limiter
+
+    login_limiter._events.clear()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+SIGNUP = {
+    "name": "Ada Student",
+    "email": "Ada@Example.com",
+    "password": "correct-horse-1",
+    "domain": "Computer Science & IT",
+    "specialization": "Data Science",
+    "fieldOfStudy": "Data Science",
+    "level": "Master's",
+    "preferredLanguage": "English",
+    "timeZone": "Africa/Tunis",
+    "targetRole": "ML Engineer",
+}

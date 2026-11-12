@@ -69,6 +69,14 @@ _STATUS_CODES = {
 }
 
 
+def _humanize(field: str) -> str:
+    """timeZone / time_zone -> 'Time zone'."""
+    import re
+
+    words = re.sub(r"(?<!^)(?=[A-Z])", " ", field).replace("_", " ").lower()
+    return words[:1].upper() + words[1:]
+
+
 def _body(request: Request, code: str, message: str, details: list[dict[str, Any]] | None = None) -> dict:
     return {
         "error": {
@@ -95,9 +103,15 @@ def install_error_handlers(app: FastAPI) -> None:
             }
             for err in exc.errors()
         ]
-        return JSONResponse(
-            _body(request, "validation_error", "Some request fields are invalid.", details), status_code=422
-        )
+        # A single invalid field gets a specific message the UI can show as-is.
+        message = "Some request fields are invalid."
+        if len(details) == 1:
+            field = details[0]["field"].rsplit(".", 1)[-1]
+            text = details[0]["message"]
+            for prefix in ("Value error, ", "value is not a valid email address: "):
+                text = text.removeprefix(prefix)
+            message = f"{_humanize(field)}: {text}" if field else text
+        return JSONResponse(_body(request, "validation_error", message, details), status_code=422)
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException):

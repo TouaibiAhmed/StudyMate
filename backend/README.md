@@ -30,6 +30,26 @@ cd frontend; npm run dev                                                # UI   (
 
 Check: `http://localhost:8000/api/health/ready` should report database, vector extension and LLM as ok.
 
+### Pointing the frontend at the backend
+
+Features move from mock data to the real API one build step at a time. Create
+`frontend/.env.local` (git-ignored) with the features that are already served by FastAPI:
+
+```env
+VITE_API_BASE_URL=
+VITE_DATA_MODE=mock
+VITE_AUTH_DATA_MODE=api
+VITE_PROFILE_DATA_MODE=api
+```
+
+With `VITE_API_BASE_URL` empty, the Vite dev server proxies `/api/*` to `localhost:8000`, so the
+session cookie stays same-origin.
+
+| Feature | Status |
+|---|---|
+| auth, profile (incl. study preferences) | api |
+| everything else | mock (connected in later steps) |
+
 ## Tests
 
 ```powershell
