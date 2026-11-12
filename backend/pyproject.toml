@@ -1,0 +1,52 @@
+[project]
+name = "studymate-backend"
+version = "0.1.0"
+description = "StudyMate backend: FastAPI API, background worker and local AI services"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "pgvector>=0.3.6",
+    "httpx>=0.28",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.17",
+]
+
+[project.optional-dependencies]
+# Local embeddings with sentence-transformers (pulls in PyTorch, CPU build by default).
+embeddings = [
+    "sentence-transformers>=3.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "integration: needs running Postgres and/or Ollama",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+# Pydantic/SQLAlchemy generics read better with Generic[...] than PEP 695 syntax.
+ignore = ["UP046"]

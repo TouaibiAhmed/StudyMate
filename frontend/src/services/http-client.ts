@@ -88,6 +88,13 @@ async function readResponseBody(response: Response): Promise<unknown> {
 }
 
 function messageFromPayload(payload: unknown, fallback: string) {
+  // Backend error shape: { error: { code, message, requestId, details } }
+  if (typeof payload === 'object' && payload !== null && 'error' in payload) {
+    const error = payload.error
+    if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+      return error.message
+    }
+  }
   if (typeof payload === 'object' && payload !== null && 'detail' in payload) {
     const detail = payload.detail
     if (typeof detail === 'string') return detail

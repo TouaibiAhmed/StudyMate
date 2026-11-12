@@ -1,0 +1,25 @@
+# Local development services. Ollama runs natively on the host (it needs the GPU),
+# the API and worker run from backend/.venv (see backend/README.md).
+name: studymate
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: studymate
+      POSTGRES_PASSWORD: studymate
+      POSTGRES_DB: studymate
+    ports:
+      - "5433:5432"   # 5433 on the host so it never clashes with a locally installed Postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/docker/init-test-db.sql:/docker-entrypoint-initdb.d/10-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studymate -d studymate"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  pgdata:

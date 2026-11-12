@@ -1,0 +1,7 @@
+{% for e in evidence.items %}
+<excerpt id="{{ e.label }}" source="{{ e.document_title }}, p. {{ e.page_start }}{% if e.page_end != e.page_start %}-{{ e.page_end }}{% endif %}">
+{{ e.text }}
+</excerpt>
+{% else %}
+(no course excerpts)
+{% endfor %}
