@@ -42,17 +42,44 @@ async def _material_counts(db: AsyncSession, course_ids: list[str]) -> dict[str,
     return {cid: (total, ready) for cid, total, ready in rows.all()}
 
 
-def _to_out(course: Course, counts: tuple[int, int] | None) -> CourseOut:
+async def _concept_levels(db: AsyncSession, user_id: str, course_ids: list[str]) -> dict[str, dict[str, str]]:
+    """course_id -> {concept_id: status} for the student's concepts."""
+    from app.modules.study.models import ConceptProgress  # local import: study depends on courses
+
+    rows = (await db.execute(
+        select(Concept.course_id, Concept.id, ConceptProgress.status)
+        .outerjoin(ConceptProgress, (ConceptProgress.concept_id == Concept.id) & (ConceptProgress.user_id == user_id))
+        .where(Concept.course_id.in_(course_ids))
+    )).all() if course_ids else []
+    out: dict[str, dict[str, str]] = {}
+    for course_id, concept_id, status in rows:
+        out.setdefault(course_id, {})[concept_id] = status or "not_enough_evidence"
+    return out
+
+
+def _course_level(statuses: dict[str, str] | None) -> int:
+    """Average concept level (see learning.policy.STATUS_LEVEL); 0 for a course without concepts."""
+    from app.learning.policy import STATUS_LEVEL, ConceptStatus
+
+    if not statuses:
+        return 0
+    return round(sum(STATUS_LEVEL[ConceptStatus(s)] for s in statuses.values()) / len(statuses))
+
+
+def _to_out(course: Course, counts: tuple[int, int] | None, statuses: dict[str, str] | None = None) -> CourseOut:
     total, ready = counts or (0, 0)
-    return CourseOut.model_validate(course).model_copy(update={"material_count": total, "completed_materials": ready})
+    return CourseOut.model_validate(course).model_copy(update={
+        "material_count": total, "completed_materials": ready, "progress": _course_level(statuses)})
 
 
 async def list_courses(db: AsyncSession, user_id: str) -> list[CourseOut]:
     courses = (await db.execute(
         select(Course).where(Course.user_id == user_id).order_by(Course.updated_at.desc())
     )).scalars().all()
-    counts = await _material_counts(db, [c.id for c in courses])
-    return [_to_out(c, counts.get(c.id)) for c in courses]
+    ids = [c.id for c in courses]
+    counts = await _material_counts(db, ids)
+    levels = await _concept_levels(db, user_id, ids)
+    return [_to_out(c, counts.get(c.id), levels.get(c.id)) for c in courses]
 
 
 async def create_course(db: AsyncSession, user_id: str, data: CourseCreate) -> CourseOut:
@@ -74,9 +101,18 @@ async def create_course(db: AsyncSession, user_id: str, data: CourseCreate) -> C
 
 
 async def get_course(db: AsyncSession, user_id: str, course_id: str) -> CourseOut:
+    from app.modules.progress.service import session_history  # local import: progress depends on courses
+
     course = await get_owned_course(db, user_id, course_id)
     counts = await _material_counts(db, [course.id])
-    return _to_out(course, counts.get(course.id))
+    levels = await _concept_levels(db, user_id, [course.id])
+    history = await session_history(db, user_id, course_id=course.id, limit=5)
+    out = _to_out(course, counts.get(course.id), levels.get(course.id))
+    return out.model_copy(update={
+        "last_studied": history[0].date if history else None,
+        "sessions": [{"id": h.session_id, "title": h.title, "date": h.date,
+                      "duration": f"{max(1, h.duration_seconds // 60)} min", "score": h.outcome} for h in history],
+    })
 
 
 async def delete_course(db: AsyncSession, user_id: str, course_id: str) -> None:
@@ -93,8 +129,12 @@ async def delete_course(db: AsyncSession, user_id: str, course_id: str) -> None:
             log.warning("Could not delete an uploaded file of a deleted course")
 
 
-def concept_out(concept: Concept) -> ConceptOut:
+def concept_out(concept: Concept, status: str = "not_enough_evidence") -> ConceptOut:
+    from app.learning.policy import STATUS_LEVEL, ConceptStatus
+
     return ConceptOut(
+        status=status,
+        progress=STATUS_LEVEL[ConceptStatus(status)],
         id=concept.id,
         course_id=concept.course_id,
         name=concept.name,
@@ -112,7 +152,8 @@ async def list_concepts(db: AsyncSession, user_id: str, course_id: str) -> list[
     concepts = (await db.execute(
         select(Concept).where(Concept.course_id == course_id).order_by(Concept.position, Concept.created_at)
     )).scalars().all()
-    return [concept_out(c) for c in concepts]
+    statuses = (await _concept_levels(db, user_id, [course_id])).get(course_id, {})
+    return [concept_out(c, statuses.get(c.id, "not_enough_evidence")) for c in concepts]
 
 
 async def extract_concepts_again(db: AsyncSession, user_id: str, course_id: str) -> CourseOut:

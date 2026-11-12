@@ -1,4 +1,4 @@
-import type { MockVerdict, SessionSource, StudyFeedback, StudyMode, StudyQuestion, StudySessionDetail, StudySessionService } from '../contracts/sessions'
+import type { AnswerUsage, MockVerdict, NextActivityResult, SessionSource, StudyFeedback, StudyMode, StudyQuestion, StudySessionDetail, StudySessionService } from '../contracts/sessions'
 import type { CreateSessionRequestDto, NextActivityResponseDto, StructuredEvaluationDto, StudyActivityDto, StudySessionDto } from '../contracts/api/study-sessions'
 import type { ApiSourceReference } from '../contracts/api/common'
 import { apiClient } from '../http-client'
@@ -46,8 +46,14 @@ function mapActivityToQuestion(act: StudyActivityDto, defaultTopic: string, isGr
     hints: Array.isArray(act.hints) ? act.hints : [],
     explanation: act.explanation || '',
     sources,
+    type: act.type ?? undefined,
+    difficulty: (act as { difficulty?: string }).difficulty,
+    reason: (act as { reason?: string }).reason,
   }
 }
+
+/** Evaluation runs a local model synchronously: allow several minutes on CPU-only machines. */
+const EVALUATION_TIMEOUT_MS = 300_000
 
 export function mapSessionDtoToDetail(dto: StudySessionDto): StudySessionDetail {
   const rawMode = dto.mode || dto.knowledgeMode || dto.knowledge_mode || 'course_grounded'
@@ -55,18 +61,9 @@ export function mapSessionDtoToDetail(dto: StudySessionDto): StudySessionDetail 
   const mode: StudyMode = isGrounded ? 'Course-grounded' : 'General knowledge'
 
   const rawActivities = dto.activities || dto.questions || []
-  const questions: StudyQuestion[] = rawActivities.length
-    ? rawActivities.map((act) => mapActivityToQuestion(act, dto.topic, isGrounded))
-    : [
-        {
-          id: `act-${dto.id}-1`,
-          topic: dto.topic,
-          prompt: 'In your own words, explain the core idea of this topic.',
-          hints: ['Focus on the primary mechanism and what changes.'],
-          explanation: '',
-          sources: [],
-        },
-      ]
+  // No placeholder question: while the backend is still writing the first activity the session
+  // is 'preparing' and the page shows that state instead.
+  const questions: StudyQuestion[] = rawActivities.map((act) => mapActivityToQuestion(act, dto.topic, isGrounded))
 
   const firstQuestion = questions[0]
   const sources = firstQuestion ? firstQuestion.sources : []
@@ -86,6 +83,7 @@ export function mapSessionDtoToDetail(dto: StudySessionDto): StudySessionDetail 
     explanation: firstQuestion?.explanation || '',
     sources,
     questions,
+    status: (dto.status as StudySessionDetail['status']) ?? undefined,
   }
 }
 
@@ -97,20 +95,13 @@ export const apiStudySessionService: StudySessionService = {
     goal?: string
     mode?: StudyMode
   }): Promise<StudySessionDetail> {
-    const isGrounded = input.mode ? input.mode === 'Course-grounded' : Boolean(input.courseId)
-    const knowledgeMode = isGrounded ? 'course_grounded' : 'general_knowledge'
-
+    // The backend decides the knowledge mode from the material it finds (labelled in the session).
     const payload: CreateSessionRequestDto = {
       courseId: input.courseId,
-      course_id: input.courseId,
       conceptId: input.conceptId,
-      concept_id: input.conceptId,
-      topic: input.topic || 'General study',
-      goal: input.goal || `Deepen understanding of ${input.topic || 'the topic'}.`,
-      knowledgeMode,
-      knowledge_mode: knowledgeMode,
+      topic: input.topic,
+      goal: input.goal,
     }
-
     const response = await apiClient.post<StudySessionDto>('/api/sessions', payload)
     return mapSessionDtoToDetail(response.data)
   },
@@ -121,29 +112,29 @@ export const apiStudySessionService: StudySessionService = {
     return mapSessionDtoToDetail(response.data)
   },
 
-  async getNextActivity(sessionId: string): Promise<StudyQuestion | undefined> {
-    const response = await apiClient.post<NextActivityResponseDto | StudyActivityDto>(`/api/sessions/${sessionId}/next`)
-    if (!response.data) return undefined
-
-    const activity = 'activity' in response.data ? response.data.activity : response.data
-    return mapActivityToQuestion(activity, 'Follow-up practice', true)
+  async getNextActivity(sessionId: string): Promise<NextActivityResult> {
+    const response = await apiClient.post<NextActivityResponseDto & { status?: NextActivityResult['status'] }>(`/api/sessions/${sessionId}/next`)
+    const data = response.data
+    const status = data.status ?? (data.activity ? 'ready' : 'preparing')
+    const grounded = (data.activity as { knowledgeMode?: string } | undefined)?.knowledgeMode !== 'general_knowledge'
+    return {
+      status,
+      question: data.activity ? mapActivityToQuestion(data.activity, data.activity.topic ?? '', grounded) : undefined,
+      reason: data.recommendedReason ?? data.recommended_reason,
+      isLast: data.isLast ?? data.is_last,
+    }
   },
 
-  async evaluateAnswer(sessionId: string, questionId: string, attempt: number, answer = ''): Promise<StudyFeedback> {
+  async evaluateAnswer(_sessionId: string, questionId: string, attempt: number, answer = '', usage?: AnswerUsage): Promise<StudyFeedback> {
     const payload = {
       answer: answer.trim(),
       attemptNumber: attempt + 1,
-      attempt_number: attempt + 1,
-      sessionId,
-      session_id: sessionId,
+      hintsUsed: usage?.hintsUsed ?? 0,
+      explanationViewed: usage?.explanationViewed ?? false,
     }
-
-    const response = await apiClient.post<StructuredEvaluationDto>(`/api/activities/${questionId}/attempts`, payload)
+    const response = await apiClient.post<StructuredEvaluationDto>(`/api/activities/${questionId}/attempts`, payload, { timeoutMs: EVALUATION_TIMEOUT_MS })
     const dto = response.data
 
-    const verdict = normalizeVerdict(dto.verdict)
-    const confidence = normalizeConfidence(dto.confidence)
-    const strengths = Array.isArray(dto.strengths) ? dto.strengths : []
     const missingIdeas = Array.isArray(dto.missingIdeas)
       ? dto.missingIdeas
       : Array.isArray(dto.missing_ideas)
@@ -151,19 +142,20 @@ export const apiStudySessionService: StudySessionService = {
       : Array.isArray(dto.gaps)
       ? dto.gaps
       : []
-
-    const nextActivity = dto.nextActivity || dto.next_activity || 'Continue with the next concept practice.'
-    const evidenceRefs = dto.evidence || dto.sources || []
-    const evidence = evidenceRefs.map(mapSourceReference)
+    const evidence = (dto.evidence || dto.sources || []).map(mapSourceReference)
 
     return {
-      verdict,
-      strengths: strengths.length ? strengths : ['Clear initial attempt demonstrating reasoning effort.'],
+      verdict: normalizeVerdict(dto.verdict),
+      strengths: Array.isArray(dto.strengths) ? dto.strengths : [],
       missingIdeas,
       misconception: dto.misconception ?? undefined,
-      confidence,
-      nextActivity,
+      confidence: normalizeConfidence(dto.confidence),
+      nextActivity: dto.nextActivity || dto.next_activity || '',
       evidence: evidence.length ? evidence : undefined,
     }
+  },
+
+  async completeSession(sessionId: string): Promise<void> {
+    await apiClient.post(`/api/sessions/${sessionId}/complete`)
   },
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { studySessionService } from '../../services/api-client'
 import type { AnswerRecord, StudyFeedback, StudyQuestion, StudySessionDetail } from '../../services/contracts/sessions'
 import { learningRecordService } from '../../services/api-client'
@@ -9,6 +9,8 @@ export type SessionControllerState = {
   questionIndex: number
   hintLevel: number
   explanationVisible: boolean
+  /** True once the explanation was opened for the current question (it counts against independence). */
+  explanationViewed?: boolean
   feedback?: StudyFeedback
   history: AnswerRecord[]
   summaryVisible: boolean
@@ -24,20 +26,40 @@ const initialState: SessionControllerState = {
   summaryVisible: false,
 }
 
+const NEXT_POLL_MS = 4000
+const NEXT_MAX_WAIT_MS = 10 * 60 * 1000
+
 export function useStudySessionController(session?: StudySessionDetail) {
   const [state, setState] = useState<SessionControllerState>(() => readState(session?.id))
   const [evaluating, setEvaluating] = useState(false)
+  // Questions grow during the session: the backend prepares each one after the previous answer.
+  const [questions, setQuestions] = useState<StudyQuestion[]>(session?.questions ?? [])
+  const [loadingNext, setLoadingNext] = useState(false)
+  const [nextError, setNextError] = useState('')
+  const cancelled = useRef(false)
+
+  // Reset on (re)mount: React StrictMode mounts twice in development, and a flag left `true`
+  // by the first cleanup would stop the "wait for the next question" loop immediately.
+  useEffect(() => {
+    cancelled.current = false
+    return () => { cancelled.current = true }
+  }, [])
 
   useEffect(() => {
     if (session?.id) window.sessionStorage.setItem(`study-session-flow:${session.id}`, JSON.stringify(state))
   }, [session?.id, state])
 
-  const question: StudyQuestion | undefined = session?.questions[state.questionIndex]
-  const isLastQuestion = Boolean(session && question && state.questionIndex >= session.questions.length - 1)
-  const progress = session && question ? ((state.questionIndex + 1) / session.questions.length) * 100 : 0
+  const total = Math.max(session?.activityTotal ?? questions.length, questions.length, 1)
+  const question: StudyQuestion | undefined = questions[state.questionIndex]
+  const isLastQuestion = Boolean(session && question && state.questionIndex >= total - 1)
+  const progress = session && question ? ((state.questionIndex + (state.feedback ? 1 : 0)) / total) * 100 : 0
 
   function update(update: Partial<SessionControllerState>) {
-    setState((current) => ({ ...current, ...update }))
+    setState((current) => ({
+      ...current,
+      ...update,
+      explanationViewed: current.explanationViewed || Boolean(update.explanationVisible),
+    }))
   }
 
   async function submitAnswer() {
@@ -47,7 +69,10 @@ export function useStudySessionController(session?: StudySessionDetail) {
     const attemptCount = state.history.filter((record) => record.questionId === question.id).length
 
     try {
-      const feedback = await studySessionService.evaluateAnswer(session.id, question.id, attemptCount, currentAnswer)
+      const feedback = await studySessionService.evaluateAnswer(session.id, question.id, attemptCount, currentAnswer, {
+        hintsUsed: state.hintLevel,
+        explanationViewed: Boolean(state.explanationViewed),
+      })
       const record = {
         id: `${session.id}-${question.id}-${Date.now()}`,
         sessionId: session.id,
@@ -75,12 +100,58 @@ export function useStudySessionController(session?: StudySessionDetail) {
     update({ answer: '', feedback: undefined, submissionError: undefined, hintLevel: 0, explanationVisible: false })
   }
 
-  function continueToNext() {
-    if (!session || isLastQuestion) {
-      update({ summaryVisible: true })
+  function showSummary() {
+    update({ summaryVisible: true })
+    if (session) void studySessionService.completeSession?.(session.id).catch(() => {})
+  }
+
+  function advanceTo(index: number) {
+    setState((current) => ({ ...current, questionIndex: index, answer: '', feedback: undefined, submissionError: undefined, hintLevel: 0, explanationVisible: false, explanationViewed: false }))
+  }
+
+  /** Wait for the backend to finish writing the next activity (pre-generated after the last answer). */
+  async function fetchNext(): Promise<void> {
+    if (!session || !studySessionService.getNextActivity) {
+      showSummary()
       return
     }
-    update({ questionIndex: state.questionIndex + 1, answer: '', feedback: undefined, submissionError: undefined, hintLevel: 0, explanationVisible: false })
+    setLoadingNext(true)
+    setNextError('')
+    const started = Date.now()
+    try {
+      while (!cancelled.current && Date.now() - started < NEXT_MAX_WAIT_MS) {
+        const next = await studySessionService.getNextActivity(session.id)
+        if (next.status === 'ready' && next.question) {
+          const nextQuestion = next.question
+          setQuestions((current) => current.some((q) => q.id === nextQuestion.id) ? current : [...current, nextQuestion])
+          advanceTo(state.questionIndex + 1)
+          return
+        }
+        if (next.status === 'complete') {
+          showSummary()
+          return
+        }
+        if (next.status === 'failed') {
+          setNextError('The next question could not be prepared. You can finish the session and start a new one.')
+          return
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, NEXT_POLL_MS))
+      }
+      if (!cancelled.current) setNextError('The next question is taking too long. Try again in a moment.')
+    } catch (err) {
+      setNextError(classifyAiError(err).userMessage || 'The next question could not be loaded. Try again.')
+    } finally {
+      setLoadingNext(false)
+    }
+  }
+
+  function continueToNext() {
+    if (!session || isLastQuestion) {
+      showSummary()
+      return
+    }
+    if (questions[state.questionIndex + 1]) advanceTo(state.questionIndex + 1)
+    else void fetchNext()
   }
 
   function requestHint() {
@@ -96,7 +167,7 @@ export function useStudySessionController(session?: StudySessionDetail) {
     }
   }, [state.history])
 
-  return { state, question, progress, isLastQuestion, evaluating, update, submitAnswer, retry, continueToNext, requestHint, summary }
+  return { state, question, questions, total, progress, isLastQuestion, evaluating, loadingNext, nextError, update, submitAnswer, retry, continueToNext, requestHint, showSummary, summary }
 }
 
 function unique(items: string[]) {

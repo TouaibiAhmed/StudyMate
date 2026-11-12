@@ -1,0 +1,17 @@
+Question: {{ question }}
+{% if context %}Context: {{ context }}
+{% endif %}
+Rubric:
+- Required ideas: {{ rubric.required_ideas | join("; ") }}
+{% if rubric.acceptable_alternatives %}- Acceptable alternatives: {{ rubric.acceptable_alternatives | join("; ") }}
+{% endif %}
+{% if rubric.common_gaps %}- Common gaps: {{ rubric.common_gaps | join("; ") }}
+{% endif %}
+{% if learner.knowledge_mode == "course_grounded" %}
+Course excerpts:
+{% include '_shared/excerpts.j2' %}
+{% endif %}
+
+<student_answer>
+{{ answer }}
+</student_answer>

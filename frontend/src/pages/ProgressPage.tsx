@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, BarChart3, BookOpen, CheckCircle2, Clock3, HelpCircle, Search, Target, TrendingUp, X } from 'lucide-react'
+import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, Clock3, HelpCircle, Search, Target, TrendingUp, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Link } from 'react-router-dom'
@@ -139,7 +139,7 @@ export function ProgressPage() {
           icon={<Target size={18} />}
           label="Concepts reviewed"
           value={`${data.concepts.length}`}
-          detail={`${needsAttention.length} need revision attention`}
+          detail={`${data.concepts.filter((c) => c.status === 'Needs practice').length} need practice · ${data.concepts.filter((c) => c.status === 'Not enough evidence').length} not studied yet`}
           color="orange"
         />
       </div>

@@ -18,24 +18,29 @@ export function StudySessionPage() {
 
   useEffect(() => {
     let active = true
+    let timer: number | undefined
     if (!sessionId) return
-    void studySessionService.getSession(sessionId).then((detail) => {
-      if (active) {
-        const roadmapTopic = (location.state as { topic?: string } | null)?.topic
-        if (!detail) return
-        setSession(roadmapTopic ? { ...detail, topic: roadmapTopic, goal: `Build a clear working explanation of ${roadmapTopic}.`, questions: detail.questions.map((question) => ({ ...question, topic: roadmapTopic })) } : detail)
-        setLoading(false)
-      }
+    const load = () => void studySessionService.getSession(sessionId).then((detail) => {
+      if (!active) return
+      const roadmapTopic = (location.state as { topic?: string } | null)?.topic
+      if (!detail) return
+      setSession(roadmapTopic ? { ...detail, topic: roadmapTopic, goal: `Build a clear working explanation of ${roadmapTopic}.`, questions: detail.questions.map((question) => ({ ...question, topic: roadmapTopic })) } : detail)
+      setLoading(false)
+      // The first question is written by the local model in the background: poll until it is ready.
+      if (detail.status === 'preparing') timer = window.setTimeout(load, 4000)
     }).catch(() => {
       if (active) {
         setLoadError(true)
         setLoading(false)
       }
     })
-    return () => { active = false }
+    load()
+    return () => { active = false; window.clearTimeout(timer) }
   }, [location.state, sessionId])
 
   if (loading) return <SessionSkeleton />
+  if (session?.status === 'preparing') return <PreparingSession topic={session.topic} onExit={() => navigate(session.courseId ? `/courses/${session.courseId}` : '/courses')} />
+  if (session?.status === 'failed') return <EmptyState title="This session could not be prepared" text="The AI model could not write a question for this topic. Go back to your course and start a new session." action={<Link className="button button-secondary" to={session.courseId ? `/courses/${session.courseId}` : '/courses'}>Back to course</Link>} />
   if (loadError) return <EmptyState title="This session could not load" text="Your local session state is safe. Return to your course and try again." />
   if (!session) return <EmptyState title="Session not found" text="This study session is no longer available." />
 
@@ -44,7 +49,7 @@ export function StudySessionPage() {
 
 function StudySessionWorkspace({ session, onExit }: { session: StudySessionDetail; onExit: () => void }) {
   const controller = useStudySessionController(session)
-  const { state, question, progress, isLastQuestion, evaluating, update, submitAnswer, retry, continueToNext, requestHint, summary } = controller
+  const { state, question, total, progress, isLastQuestion, evaluating, loadingNext, nextError, update, submitAnswer, retry, continueToNext, requestHint, showSummary, summary } = controller
   const [abandonOpen, setAbandonOpen] = useState(false)
   if (!question) return <EmptyState title="No activities yet" text="This session does not have any questions to work through." />
   const hasActiveWork = Boolean(state.answer.trim() || state.history.length || state.hintLevel || state.explanationVisible || state.feedback)
@@ -70,14 +75,14 @@ function StudySessionWorkspace({ session, onExit }: { session: StudySessionDetai
 
       <div className="study-progress-row">
         <div>
-          <span className="eyebrow">Activity {state.questionIndex + 1} of {session.questions.length}</span>
+          <span className="eyebrow">Activity {state.questionIndex + 1} of {total}</span>
           <ProgressBar value={progress} />
         </div>
         <span>{Math.round(progress)}%</span>
       </div>
 
       {state.summaryVisible ? (
-        <SessionSummary session={session} summary={summary} onExit={onExit} />
+        <SessionSummary session={session} answered={new Set(state.history.map((record) => record.questionId)).size} summary={summary} onExit={onExit} />
       ) : (
         <div className="study-layout">
           <section className="study-main">
@@ -95,6 +100,7 @@ function StudySessionWorkspace({ session, onExit }: { session: StudySessionDetai
                   {state.feedback ? 'Feedback ready' : state.submissionError ? 'Submission error' : 'Awaiting your reasoning'}
                 </span>
               </div>
+              {question.reason && <p className="question-reason">{question.reason}</p>}
               <h2 id="study-question">{question.prompt}</h2>
               {question.context && <p className="question-context">{question.context}</p>}
               <label className="answer-editor">
@@ -150,9 +156,12 @@ function StudySessionWorkspace({ session, onExit }: { session: StudySessionDetai
               </div>
             )}
             {state.feedback && (
-              <button className="continue-question" onClick={continueToNext}>
-                {isLastQuestion ? 'View session summary' : 'Continue to follow-up question'} <ChevronRight size={17} />
+              <button className="continue-question" onClick={continueToNext} disabled={loadingNext}>
+                {loadingNext ? 'Preparing your next question… (the local model may need a minute)' : isLastQuestion ? 'View session summary' : 'Continue to follow-up question'} <ChevronRight size={17} />
               </button>
+            )}
+            {nextError && (
+              <p className="submission-error" role="alert"><AlertCircle size={15} /> {nextError} <button className="button button-secondary" onClick={showSummary}>Finish session</button></p>
             )}
             {state.history.length > 0 && <AnswerHistory history={state.history} />}
           </section>
@@ -214,13 +223,13 @@ function AnswerHistory({ history }: { history: ReturnType<typeof useStudySession
   )
 }
 
-function SessionSummary({ session, summary, onExit }: { session: StudySessionDetail; summary: { strengths: string[]; gaps: string[]; revision: string }; onExit: () => void }) {
+function SessionSummary({ answered, summary, onExit }: { session: StudySessionDetail; answered: number; summary: { strengths: string[]; gaps: string[]; revision: string }; onExit: () => void }) {
   return (
     <section className="session-summary" role="status" aria-live="polite">
       <div className="summary-icon"><Sparkles size={22} /></div>
       <span className="eyebrow">Session complete</span>
       <h1>Good work.</h1>
-      <p>You made your reasoning visible across {session.questions.length} activities. Here’s what to carry forward.</p>
+      <p>You made your reasoning visible across {answered} {answered === 1 ? 'activity' : 'activities'}. Here’s what to carry forward.</p>
       <div className="summary-grid">
         <div>
           <strong>Demonstrated strengths</strong>
@@ -287,6 +296,20 @@ function StudySources({ mode, sources }: { mode: StudySessionDetail['mode']; sou
         <Link to="/progress" className="text-link">View your progress <ChevronRight size={14} /></Link>
       </section>
     </aside>
+  )
+}
+
+function PreparingSession({ topic, onExit }: { topic: string; onExit: () => void }) {
+  return (
+    <div className="study-workspace" aria-label="Preparing study session">
+      <header className="study-header"><button className="study-exit" onClick={onExit}><ArrowLeft size={16} /> Leave session</button></header>
+      <section className="question-card preparing-card" role="status" aria-live="polite">
+        <div className="question-label"><Sparkles size={16} /> Preparing your session</div>
+        <h2>Writing a first question about {topic}…</h2>
+        <p>StudyMate is reading your course material and writing a question with hints. On a local model this can take a minute or two; this page updates by itself.</p>
+        <ProgressBar value={35} />
+      </section>
+    </div>
   )
 }
 

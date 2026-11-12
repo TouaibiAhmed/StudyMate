@@ -1,0 +1,20 @@
+Concept: {{ concept_name }}{% if concept_description %} ({{ concept_description }}){% endif %}
+
+Activity type: {{ activity_type }}
+{% if activity_type == "diagnostic" %}Ask a question that shows what the student already understands about the concept.
+{% elif activity_type == "explain_and_check" %}The student answered incorrectly. Put a short explanation of the key idea in "context", then ask a simpler question that checks it.
+{% elif activity_type == "targeted_practice" %}The student missed part of the idea. Ask a question that focuses on exactly that part.
+{% elif activity_type == "review" %}The student needed hints last time. Ask a similar question at the same level, phrased differently.
+{% elif activity_type == "transfer" %}The student understands the basics. Ask them to apply the idea in a new situation.
+{% endif %}
+Difficulty: {{ difficulty }}
+{% if focus %}Focus on: {{ focus }}
+{% endif %}
+{% if previous_questions %}Do not repeat these earlier questions:
+{% for q in previous_questions %}- {{ q }}
+{% endfor %}{% endif %}
+
+{% if learner.knowledge_mode == "course_grounded" %}
+Course excerpts:
+{% include '_shared/excerpts.j2' %}
+{% endif %}

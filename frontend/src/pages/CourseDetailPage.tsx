@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState } from '../components/feedback/EmptyState'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { DocumentUpload } from '../features/courses/DocumentUpload'
-import { courseService, documentService, studyToolsService } from '../services/api-client'
+import { courseService, documentService, studySessionService, studyToolsService } from '../services/api-client'
 import type { CourseDetail } from '../services/contracts/courses'
 import type { StudyDocument } from '../services/contracts/documents'
 import type { Quiz, Summary } from '../services/contracts/study-tools'
@@ -30,6 +30,7 @@ export function CourseDetailPage() {
   const [toolsError, setToolsError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deletingCourse, setDeletingCourse] = useState(false)
+  const [startingStudy, setStartingStudy] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const conceptPollRef = useRef(false)
@@ -113,6 +114,24 @@ export function CourseDetailPage() {
   if (loadError) return <EmptyState title="Course unavailable" text={loadError} action={<Link className="button button-secondary" to="/courses">Back to courses</Link>} />
   if (!course || !courseId) return <EmptyState title="Course not found" text="This course may have been removed or the link is no longer available." action={<Link className="button button-secondary" to="/courses">Back to courses</Link>} />
   const currentCourseId = courseId
+
+  /** api mode: create a session (on the chosen or suggested concept) and open it. */
+  async function startStudy(conceptId?: string) {
+    if (!courseId) return
+    if (!studySessionService.startSession) {
+      navigate(`/study/${course?.sessions[0]?.id ?? 'session-general-01'}`)
+      return
+    }
+    setStartingStudy(true)
+    setDocumentError('')
+    try {
+      const session = await studySessionService.startSession({ courseId, conceptId })
+      navigate(`/study/${session.id}`)
+    } catch {
+      setDocumentError('A study session could not be started. Try again in a moment.')
+      setStartingStudy(false)
+    }
+  }
 
   async function retryConcepts() {
     if (!courseService.extractConcepts || !courseId) return
@@ -236,7 +255,7 @@ export function CourseDetailPage() {
             <span><Clock3 size={15} /> Last studied {course.lastStudied}</span>
           </div>
         </div>
-        <button className="button course-start-button" onClick={() => navigate(`/study/${course.sessions[0]?.id ?? 'session-general-01'}`)}>
+        <button className="button course-start-button" onClick={() => void startStudy()} disabled={startingStudy}>
           <Play size={16} fill="currentColor" /> Start studying
         </button>
       </section>
@@ -251,7 +270,7 @@ export function CourseDetailPage() {
             <ProgressBar value={course.progress} />
             <div className="concept-progress-list">
               {course.concepts.map((concept) => (
-                <button className="concept-progress-row" key={concept.id} onClick={() => navigate(`/study/${course.sessions[0]?.id ?? 'session-general-01'}`)}>
+                <button className="concept-progress-row" key={concept.id} onClick={() => void startStudy(concept.id)} disabled={startingStudy}>
                   <div>
                     <strong>{concept.title}</strong>
                     <span>{concept.status} · Study this</span>

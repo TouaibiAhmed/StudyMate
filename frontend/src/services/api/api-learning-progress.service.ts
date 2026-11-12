@@ -67,7 +67,8 @@ function mapConceptDtoToProgressConcept(dto: ConceptProgressDto, courseMap: Map<
     progress: typeof dto.progress === 'number' ? dto.progress : status === 'Good evidence' ? 100 : status === 'Developing' ? 65 : status === 'Needs practice' ? 35 : 10,
     reason,
     revisionReason: reason,
-    practiceSessionId: dto.courseId ? `session-${dto.courseId}` : undefined,
+    // Sessions are created on demand from the course page ("Study this"), not pre-assigned.
+    practiceSessionId: undefined,
     recommendedAction: dto.recommendedAction || dto.recommended_action || (status === 'Needs practice' ? 'Review this concept with a focused practice question.' : 'Reinforce this concept with an active study session.'),
     attempts,
   }
@@ -108,25 +109,12 @@ export const apiLearningProgressService: ProgressService = {
       // Continue without course list if unavailable
     }
 
-    // 2. Fetch main progress or dashboard summary
-    const progressPath = options?.range ? `/api/dashboard?range=${options.range}` : '/api/dashboard'
-    const response = await apiClient.get<ProgressDto>(progressPath).catch(() =>
-      apiClient.get<ProgressDto>('/api/progress')
-    )
+    // 2. Progress summary (the backend filters by range and course)
+    const params = new URLSearchParams({ range: options?.range ?? '7d' })
+    if (options?.courseId) params.set('courseId', options.courseId)
+    const response = await apiClient.get<ProgressDto>(`/api/progress?${params.toString()}`)
     const dto = response.data
-
-    // If a specific course is selected, fetch its concept-level progress
-    let rawConcepts = dto.concepts || []
-    if (options?.courseId) {
-      try {
-        const courseProgressRes = await apiClient.get<CourseProgressResponseDto | ConceptProgressDto[] | { items: ConceptProgressDto[] }>(`/api/courses/${options.courseId}/progress`)
-        const cData = courseProgressRes.data
-        rawConcepts = Array.isArray(cData) ? cData : 'items' in cData ? cData.items : 'concepts' in cData ? cData.concepts : rawConcepts
-      } catch {
-        // Fallback to filtering top-level concepts
-        rawConcepts = rawConcepts.filter((c) => (c.courseId || c.course_id) === options.courseId)
-      }
-    }
+    const rawConcepts = dto.concepts || []
 
     const concepts = rawConcepts.map((c) => mapConceptDtoToProgressConcept(c, courseMap))
 
@@ -144,15 +132,8 @@ export const apiLearningProgressService: ProgressService = {
       .filter((s) => !options?.courseId || s.courseId === options.courseId)
 
     // 4. Activity chart data
-    const rawWeekly = dto.weeklyActivity || dto.weekly_activity || [
-      { day: 'Mon', sessions: 1, questions: 3, minutes: 30 },
-      { day: 'Tue', sessions: 2, questions: 5, minutes: 45 },
-      { day: 'Wed', sessions: 1, questions: 2, minutes: 25 },
-      { day: 'Thu', sessions: 2, questions: 6, minutes: 50 },
-      { day: 'Fri', sessions: 3, questions: 8, minutes: 70 },
-      { day: 'Sat', sessions: 0, questions: 0, minutes: 0 },
-      { day: 'Sun', sessions: 0, questions: 0, minutes: 0 },
-    ]
+    // Only real recorded activity is shown; no placeholder chart data.
+    const rawWeekly = dto.weeklyActivity || dto.weekly_activity || []
 
     const weeklyActivity: WeeklyProgress[] = rawWeekly.map((w) => ({
       day: w.day,
@@ -163,7 +144,7 @@ export const apiLearningProgressService: ProgressService = {
 
     return {
       studyMinutes: dto.studyMinutes || dto.study_minutes || 0,
-      sessionsCompleted: dto.sessionsCompleted || dto.sessions_completed || recentSessions.length,
+      sessionsCompleted: dto.sessionsCompleted ?? dto.sessions_completed ?? 0,
       questionsAnswered: dto.questionsAnswered || dto.questions_answered || 0,
       concepts,
       recentSessions,

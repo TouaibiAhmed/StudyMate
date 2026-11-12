@@ -112,6 +112,7 @@ export const mockStudySessionService: StudySessionService = {
   async evaluateAnswer(sessionId, questionId, attempt, _answer?) {
     const session = sessions[sessionId] ?? sessions['session-general-01']
     const question = session.questions.find((item) => item.id === questionId) ?? session.questions[0]
-    return { ...question.scenarios[Math.min(attempt, question.scenarios.length - 1)] } as StudyFeedback
+    const scenarios = question.scenarios ?? []
+    return { ...scenarios[Math.min(attempt, scenarios.length - 1)] } as StudyFeedback
   },
 }

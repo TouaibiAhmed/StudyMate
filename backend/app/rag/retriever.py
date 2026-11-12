@@ -135,3 +135,21 @@ def rank(candidates: list[_Candidate], params: RetrievalParams) -> list[Evidence
                      page_start=c.page_start, page_end=c.page_end, text=c.text, score=round(c.score, 4))
         for i, c in enumerate(chosen)
     ]
+
+
+async def load_evidence(db: AsyncSession, chunk_ids: list[str]) -> EvidenceSet:
+    """Rebuild the exact excerpts an activity was written from (same order, same labels), so the
+    assessment role grades against the material the question was based on."""
+    if not chunk_ids:
+        return EvidenceSet()
+    rows = (await db.execute(text(
+        "SELECT c.id, c.document_id, d.filename, c.page_start, c.page_end, c.text "
+        "FROM chunks c JOIN documents d ON d.id = c.document_id WHERE c.id = ANY(CAST(:ids AS text[]))"
+    ), {"ids": chunk_ids})).mappings().all()
+    by_id = {r["id"]: r for r in rows}
+    found = [by_id[i] for i in chunk_ids if i in by_id]  # chunks of a deleted document are skipped
+    return EvidenceSet([
+        EvidenceItem(label=label_for(n), chunk_id=r["id"], document_id=r["document_id"], document_title=r["filename"],
+                     page_start=r["page_start"], page_end=r["page_end"], text=r["text"])
+        for n, r in enumerate(found)
+    ])

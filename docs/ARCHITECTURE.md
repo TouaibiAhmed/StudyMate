@@ -148,14 +148,35 @@ persisted in Postgres:
 Latency strategy: SSE streaming for interactive text, background jobs + polling for heavy
 generation, and pre-generating the likely next activity while the student reads feedback.
 
-## 7. Learning policy (step 4)
+## 7. Study loop and learning policy (step 4)
 
-Evidence records are immutable (answer, verdict, rubric score, hints used, difficulty, mode,
-exam flag, timestamp). The concept status (`not_enough_evidence | needs_practice | developing |
-good_evidence`) is recomputed from evidence with transparent weights: exam-condition evidence >
-unhinted practice > hinted practice; recency decay; at least two independent successes before
-`good_evidence`. Routing table from doc 11.4. Roadmap node status is derived from the linked
-concept's status, with manual overrides recorded separately.
+**Flow.** `POST /api/sessions` picks a concept (the student's choice, or needs-practice first, then
+concepts without evidence) and returns at once with status `preparing`; the worker writes the first
+activity (tutor role: question, 2-3 graduated hints, explanation, hidden rubric, excerpt citations).
+`POST /api/activities/{id}/attempts` grades the answer (assessment role, synchronous, ~1-2 min on
+CPU), stores attempt + evaluation + evidence, recomputes the concept state and queues the next
+activity, which is generated while the student reads the feedback. `POST /api/sessions/{id}/next`
+serves it (`ready`), or says it is still `preparing`.
+
+**Policy (`app/learning/policy.py`, no LLM):**
+* Evidence weight = difficulty x confidence x hint penalty (-20% per hint, min 40%) x exam bonus (1.5)
+  x general-knowledge penalty (0.8) x recency (14-day half-life).
+* Status: `needs_practice` (weighted mean < 0.45), `good_evidence` (>= 0.8 and at least 2 correct
+  answers without hints), `developing`, `not_enough_evidence` (no or only one answer). The UI bar
+  shows a level per status (0/25/55/90), never a percentage of knowledge.
+* Next activity: incorrect -> explain & check (easier); partial -> targeted practice on the gap;
+  correct with hints -> review; correct without hints -> transfer (harder); unclear -> diagnostic.
+  Routing uses the latest answer given without reading the full explanation.
+* A retry after reading the explanation is stored but not counted as evidence.
+
+**Grading safeguards (`study/service.py::_consistent`):** answers under 3 words are graded by rule
+(no model call); "correct" with missing ideas becomes "partially correct"; every required idea
+covered and no misconception means "correct"; rubric label echoes and acceptable alternatives are
+removed from gaps; covered ideas become strengths when the model lists none; general-knowledge
+grades are capped at medium confidence. These rules came from llama3.1:8b behaviour seen in testing.
+
+**Measured on the dev laptop (CPU only):** first activity ~2.5-3 min, grading ~1.5 min, next activity
+mostly ready by the time the student has read the feedback.
 
 ## 8. Recommendations (step 9)
 
