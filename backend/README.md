@@ -42,6 +42,7 @@ VITE_AUTH_DATA_MODE=api
 VITE_PROFILE_DATA_MODE=api
 VITE_COURSES_DATA_MODE=api
 VITE_DOCUMENTS_DATA_MODE=api
+VITE_CHAT_DATA_MODE=api
 ```
 
 With `VITE_API_BASE_URL` empty, the Vite dev server proxies `/api/*` to `localhost:8000`, so the
@@ -51,6 +52,7 @@ session cookie stays same-origin.
 |---|---|
 | auth, profile (incl. study preferences) | api |
 | courses, documents (upload, processing, concepts) | api |
+| chat (streamed answers with course citations) | api |
 | everything else | mock (connected in later steps) |
 
 Uploads are processed by the **worker**: keep it running, or documents stay "Queued".

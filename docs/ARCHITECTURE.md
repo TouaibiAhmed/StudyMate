@@ -118,6 +118,21 @@ on real course material when the embedding model changes.
 * Empty evidence ⇒ `general_knowledge` mode: labelled in the UI, no citations possible.
   The mode is stored on every activity, evaluation, message and generated artifact.
 
+### Course chat (step 3)
+
+* `POST /api/chat/conversations/{id}/messages/stream` answers with Server-Sent Events:
+  `user` -> `meta` (knowledge mode) -> `delta`... -> `done` (final message) or `error`.
+  Validation, rate limits and retrieval run before the stream opens, so they fail as normal JSON errors.
+* Retrieval uses the message alone; only messages that look like follow-ups ("why?", "give an example")
+  are retried together with the previous question when the first search finds nothing.
+* The model cites with `[E1]`; `finalize_answer` keeps only labels present in the evidence, renumbers
+  them `[1]`, `[2]` and attaches stored document/page metadata. General-knowledge answers carry no
+  citations and are labelled in the UI ("not from your course material").
+* One answer at a time per student (lock with a 10-minute safety expiry), 20 messages / 10 minutes.
+* Stopping an answer keeps the partial text as `interrupted`; a model failure before any text removes
+  the stored question so a retry does not duplicate it.
+* Measured on the dev laptop (CPU only): first token ~60 s from a cold model, ~3.3 tokens/s after.
+
 ## 6. Orchestration
 
 Plain Python state machines (`orchestration/state_machine.py`) with explicit transition tables,

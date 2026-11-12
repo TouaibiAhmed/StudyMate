@@ -1,0 +1,6 @@
+{% if learner.knowledge_mode == "course_grounded" %}
+Course excerpts:
+{% include '_shared/excerpts.j2' %}
+
+{% endif %}
+Student: {{ question }}

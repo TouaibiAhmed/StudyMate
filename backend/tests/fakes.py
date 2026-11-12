@@ -27,8 +27,12 @@ class ScriptedProvider:
 
     async def stream(self, messages, *, model, options) -> AsyncIterator[str]:
         self.requests.append({"messages": messages, "model": model, "stream": True})
-        for piece in self.responses.pop(0).split(" "):
-            yield piece + " "
+        item = self.responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        words = item.split(" ")
+        for i, piece in enumerate(words):
+            yield piece + (" " if i < len(words) - 1 else "")
 
     async def list_models(self) -> list[str]:
         return ["fast-model", "quality-model"]

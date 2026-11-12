@@ -9,7 +9,8 @@ import type {
   SendChatMessageResponseDto,
 } from '../contracts/api/chat'
 import type { ApiSourceReference } from '../contracts/api/common'
-import type { ChatContext, ChatConversation, ChatMessage, ChatService, ChatSource, CreateConversationInput } from '../contracts/chat'
+import type { ChatContext, ChatConversation, ChatMessage, ChatService, ChatSource, ChatStreamHandlers, CreateConversationInput } from '../contracts/chat'
+import type { ApiErrorCode } from '../http-client'
 import { ApiError, apiClient } from '../http-client'
 
 // ---------------------------------------------------------------------------
@@ -65,6 +66,57 @@ function mapMessageDto(dto: ChatMessageDto): ChatMessage {
     content: dto.content,
     createdAt: dto.createdAt,
     sources,
+    knowledgeMode: dto.knowledgeMode ?? undefined,
+    status: dto.status ?? undefined,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Server-Sent Events (streamed answers)
+//
+// EventSource only supports GET, so the stream is read from a fetch() body.
+// Events: user -> meta -> delta* -> done | error  (see backend chat/router.py)
+// ---------------------------------------------------------------------------
+
+const STATUS_CODES: Record<number, ApiErrorCode> = {
+  400: 'bad-request', 401: 'unauthorized', 403: 'forbidden', 404: 'not-found', 409: 'conflict',
+  422: 'validation', 429: 'rate-limited', 503: 'service-unavailable',
+}
+
+async function errorFromResponse(response: Response): Promise<ApiError> {
+  let message = 'The assistant could not respond.'
+  try {
+    const body = await response.json() as { error?: { message?: string } }
+    if (body.error?.message) message = body.error.message
+  } catch {
+    // keep the generic message
+  }
+  return new ApiError({ code: STATUS_CODES[response.status] ?? 'server-error', status: response.status, message })
+}
+
+type SseEvent = { event: string; data: unknown }
+
+async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<SseEvent> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary !== -1) {
+      const block = buffer.slice(0, boundary)
+      buffer = buffer.slice(boundary + 2)
+      let event = 'message'
+      const data: string[] = []
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim()
+        else if (line.startsWith('data:')) data.push(line.slice(5).trimStart())
+      }
+      if (data.length) yield { event, data: JSON.parse(data.join('\n')) }
+      boundary = buffer.indexOf('\n\n')
+    }
   }
 }
 
@@ -223,6 +275,59 @@ export const apiChatService: ChatService = {
     messageCache.set(id, hasUser ? [...existing, assistantChatMessage] : [...existing, userChatMessage, assistantChatMessage])
 
     return assistantChatMessage
+  },
+
+  async streamMessage(id: string, content: string, handlers: ChatStreamHandlers, signal?: AbortSignal): Promise<ChatMessage> {
+    checkRateLimit()
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') ?? ''
+    let response: Response
+    try {
+      response = await fetch(`${baseUrl}/api/chat/conversations/${id}/messages/stream`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify({ content: content.trim() } satisfies SendChatMessageRequestDto),
+        signal,
+      })
+    } catch (error) {
+      if (signal?.aborted) throw new ApiError({ code: 'cancelled', message: 'The request was cancelled.' })
+      throw new ApiError({ code: 'network-error', message: 'The server could not be reached.', details: error })
+    }
+    if (!response.ok || !response.body) {
+      const error = await errorFromResponse(response)
+      if (error.code === 'rate-limited') handleRateLimitResponse(error, response.headers.get('retry-after'))
+      throw error
+    }
+
+    let userMessage: ChatMessage | undefined
+    try {
+      for await (const { event, data } of readSse(response.body)) {
+        if (event === 'user') {
+          userMessage = mapMessageDto(data as ChatMessageDto)
+          handlers.onUserMessage?.(userMessage)
+        } else if (event === 'meta') {
+          handlers.onMeta?.(data as { knowledgeMode: 'course_grounded' | 'general_knowledge' })
+        } else if (event === 'delta') {
+          handlers.onDelta?.((data as { text: string }).text)
+        } else if (event === 'done') {
+          const assistant = mapMessageDto(data as ChatMessageDto)
+          const existing = messageCache.get(id) ?? []
+          messageCache.set(id, [...existing, ...(userMessage ? [userMessage] : []), assistant])
+          return assistant
+        } else if (event === 'error') {
+          const payload = data as { message?: string }
+          throw new ApiError({ code: 'service-unavailable', status: 503, message: payload.message ?? 'The assistant could not respond.' })
+        }
+      }
+    } catch (error) {
+      // The server may have kept the question and a partial answer: reload this conversation next time.
+      messageCache.delete(id)
+      if (error instanceof ApiError) throw error
+      if (signal?.aborted) throw new ApiError({ code: 'cancelled', message: 'The answer was stopped.' })
+      throw new ApiError({ code: 'network-error', message: 'The connection was interrupted.', details: error })
+    }
+    messageCache.delete(id)
+    throw new ApiError({ code: 'network-error', message: 'The connection closed before the answer finished.' })
   },
 }
 

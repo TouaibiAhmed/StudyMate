@@ -23,6 +23,8 @@ export type ChatMessageDto = {
   role: 'user' | 'assistant' | string
   content: string
   sources?: ApiSourceReference[] | null
+  knowledgeMode?: 'course_grounded' | 'general_knowledge' | null
+  status?: 'complete' | 'interrupted' | null
   createdAt: IsoTimestamp
 }
 
