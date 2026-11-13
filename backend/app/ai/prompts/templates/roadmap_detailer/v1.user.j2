@@ -1,0 +1,5 @@
+The whole roadmap, in order: {{ all_titles | join(" -> ") }}
+
+Write details for these topics:
+{% for t in topics %}- id {{ t.id }}: {{ t.title }}
+{% endfor %}

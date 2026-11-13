@@ -1,286 +1,181 @@
 import type {
   CreateRoadmapInput,
+  NodeSession,
   RoadmapCategory,
   RoadmapDetail,
   RoadmapGraphData,
   RoadmapGraphEdge,
   RoadmapGraphTopic,
   RoadmapService,
-  RoadmapSource,
   RoadmapSummary,
-  RoadmapTopic,
   RoadmapTopicStatus,
 } from '../contracts/roadmaps'
-import type {
-  GenerateRoadmapRequestDto,
-  NodeSessionResponseDto,
-  RoadmapDto,
-  RoadmapJobStatusDto,
-  RoadmapNodeDto,
-  UserRoadmapDto,
-} from '../contracts/api/roadmaps'
+import type { GenerateRoadmapRequestDto, NodeSessionResponseDto, RoadmapDto, RoadmapNodeDto } from '../contracts/api/roadmaps'
 import { apiClient } from '../http-client'
 
-function pageItems<T>(value: T[] | { items: T[] } | { roadmaps: T[] } | undefined): T[] {
-  if (!value) return []
-  if (Array.isArray(value)) return value
-  if ('items' in value && Array.isArray(value.items)) return value.items
-  if ('roadmaps' in value && Array.isArray(value.roadmaps)) return value.roadmaps
-  return []
+// Backend: /api/roadmaps (curated + the student's private generated roadmaps). Node status is computed
+// per student from their study evidence, with optional manual marks.
+
+const CATEGORY_LABELS: Record<string, RoadmapCategory> = {
+  data: 'Data',
+  engineering: 'Engineering',
+  machine_learning: 'Machine learning',
+  business: 'Business',
 }
 
-function normalizeCategory(category?: string): RoadmapCategory {
-  if (!category) return 'Engineering'
-  const c = category.toLowerCase()
-  if (c.includes('data')) return 'Data'
-  if (c.includes('machine') || c.includes('ml') || c.includes('ai')) return 'Machine learning'
-  if (c.includes('business')) return 'Business'
-  return 'Engineering'
+const CATEGORY_KEYS: Record<RoadmapCategory, string> = {
+  Data: 'data',
+  Engineering: 'engineering',
+  'Machine learning': 'machine_learning',
+  Business: 'business',
 }
 
-function determineColor(category: RoadmapCategory): RoadmapSummary['color'] {
-  if (category === 'Data') return 'purple'
-  if (category === 'Engineering') return 'green'
-  if (category === 'Machine learning') return 'orange'
-  return 'blue'
+const COLORS: Record<RoadmapCategory, RoadmapSummary['color']> = {
+  Data: 'purple',
+  Engineering: 'green',
+  'Machine learning': 'orange',
+  Business: 'blue',
 }
 
-function normalizeNodeStatus(rawStatus?: string): RoadmapTopicStatus {
-  if (!rawStatus) return 'Not started'
-  const s = rawStatus.toLowerCase().replaceAll(/[-_]/g, ' ').trim()
-  if (s === 'completed' || s === 'done') return 'Completed'
-  if (s === 'in progress' || s === 'in_progress') return 'In progress'
-  if (s === 'known') return 'Known'
+function toStatus(raw?: string): RoadmapTopicStatus {
+  if (raw === 'completed') return 'Completed'
+  if (raw === 'in_progress') return 'In progress'
+  if (raw === 'known') return 'Known'
   return 'Not started'
 }
 
-function toBackendNodeStatus(status: RoadmapTopicStatus): string {
+function toBackendStatus(status: RoadmapTopicStatus): string {
   if (status === 'Completed') return 'completed'
   if (status === 'In progress') return 'in_progress'
   if (status === 'Known') return 'known'
   return 'not_started'
 }
 
-function mapRoadmapDtoToSummary(dto: RoadmapDto): RoadmapSummary {
-  const category = normalizeCategory(dto.category || dto.domain || undefined)
-  const isGenerated = dto.source === 'generated' || String(dto.source).toLowerCase().includes('ai')
-  const source: RoadmapSource = isGenerated ? 'AI-generated mock' : 'Curated by Study Partner'
-  const color = determineColor(category)
-
-  const nodes = dto.nodes || []
-  const coreTopics = dto.coreTopics || dto.core_topics || nodes.filter((n) => !n.optional && n.type !== 'optional').map((n) => n.title).slice(0, 4)
-  const optionalTopics = dto.optionalTopics || dto.optional_topics || nodes.filter((n) => n.optional || n.type === 'optional').map((n) => n.title).slice(0, 2)
-  const topicCount = dto.topicCount || dto.topic_count || (nodes.length ? nodes.length : coreTopics.length + optionalTopics.length)
-
+function toSummary(dto: RoadmapDto): RoadmapSummary {
+  const category = CATEGORY_LABELS[dto.category ?? ''] ?? 'Engineering'
   return {
     id: dto.id,
+    slug: dto.slug,
     role: dto.role,
     category,
-    description: dto.description || `Learning path and topic progression for ${dto.role}.`,
-    topicCount: topicCount || 6,
-    coreTopics: coreTopics.length ? coreTopics : ['Foundations', 'Core workflows', 'Application'],
-    optionalTopics: optionalTopics.length ? optionalTopics : ['Advanced tools'],
-    progress: typeof dto.progress === 'number' ? dto.progress : 0,
-    source,
-    color,
+    description: dto.description ?? '',
+    topicCount: dto.topicCount ?? dto.nodes?.length ?? 0,
+    coreTopics: dto.coreTopics ?? [],
+    optionalTopics: dto.optionalTopics ?? [],
+    progress: dto.progress ?? 0,
+    source: dto.source === 'generated' ? 'AI-generated' : 'Curated by Study Partner',
+    color: COLORS[category],
+    status: (dto.status as RoadmapSummary['status']) ?? 'ready',
+    following: dto.following,
   }
 }
 
-function mapNodesToGraph(roadmapId: string, nodes: RoadmapNodeDto[]): RoadmapGraphData {
-  const topics: RoadmapGraphTopic[] = nodes.map((node, index) => {
-    const isOptional = Boolean(node.optional || node.type === 'optional')
-    const resources = (node.resources || []).map((r) => typeof r === 'string' ? r : r.title)
-    const position = node.position && typeof node.position.x === 'number'
-      ? node.position
-      : { x: (index % 3) * 260, y: Math.floor(index / 3) * 150 }
+function toDetail(dto: RoadmapDto): RoadmapDetail {
+  return {
+    ...toSummary(dto),
+    note: dto.note ?? '',
+    topics: (dto.nodes ?? []).map((node) => ({
+      id: node.id,
+      name: node.title,
+      optional: node.type === 'optional',
+      completed: node.status === 'completed' || node.status === 'known',
+    })),
+    generationProgress: dto.generationProgress,
+    stage: dto.stage,
+    error: dto.error,
+  }
+}
 
-    return {
-      id: node.id || node.nodeId || node.node_id || `node-${index}`,
-      title: node.title,
-      description: node.description || `Build understanding of ${node.title}.`,
-      optional: isOptional,
-      status: normalizeNodeStatus(node.status),
-      progress: typeof node.progress === 'number' ? node.progress : 0,
-      prerequisites: node.prerequisites || [],
-      resources: resources.length ? resources : [`${node.title} guide`],
-      position,
-    }
-  })
-
-  const edges: RoadmapGraphEdge[] = []
-  nodes.forEach((node, index) => {
-    const targetId = node.id || node.nodeId || node.node_id || `node-${index}`
-    if (node.prerequisites && node.prerequisites.length > 0) {
-      node.prerequisites.forEach((prereqId, pIndex) => {
-        edges.push({
-          id: `edge-${prereqId}-${targetId}-${pIndex}`,
-          source: prereqId,
-          target: targetId,
-        })
-      })
-    } else if (index > 0 && edges.length === 0 && nodes.length <= 10) {
-      // Linear prerequisite fallback if prerequisites array is not populated
-      const prevId = nodes[index - 1].id || `node-${index - 1}`
-      edges.push({
-        id: `fallback-edge-${prevId}-${targetId}`,
-        source: prevId,
-        target: targetId,
-      })
-    }
-  })
-
+function toGraph(nodes: RoadmapNodeDto[]): RoadmapGraphData {
+  const topics: RoadmapGraphTopic[] = nodes.map((node) => ({
+    id: node.id,
+    title: node.title,
+    description: node.description ?? '',
+    optional: node.type === 'optional',
+    status: toStatus(node.status),
+    progress: node.progress ?? 0,
+    prerequisites: node.prerequisites ?? [],
+    resources: (node.resources ?? []).map((r) => (typeof r === 'string' ? r : r.title)),
+    position: node.position ?? { x: 0, y: 0 },
+    evidenceSummary: node.evidenceSummary,
+    conceptName: node.conceptName,
+    manualOverride: Boolean(node.manualOverride),
+  }))
+  const edges: RoadmapGraphEdge[] = nodes.flatMap((node) =>
+    (node.prerequisites ?? []).map((source) => ({ id: `${source}->${node.id}`, source, target: node.id })),
+  )
   return { topics, edges }
+}
+
+// The detail page asks for the roadmap and its graph at the same time: share one request.
+const inFlight = new Map<string, Promise<RoadmapDto>>()
+function fetchRoadmap(id: string): Promise<RoadmapDto> {
+  const pending = inFlight.get(id)
+  if (pending) return pending
+  const request = apiClient.get<RoadmapDto>(`/api/roadmaps/${id}`).then((r) => r.data)
+  inFlight.set(id, request)
+  void request.finally(() => window.setTimeout(() => inFlight.delete(id), 300)).catch(() => undefined)
+  return request
+}
+
+async function getOrUndefined(id: string): Promise<RoadmapDto | undefined> {
+  try {
+    return await fetchRoadmap(id)
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'not-found') return undefined
+    throw error
+  }
 }
 
 export const apiRoadmapService: RoadmapService = {
   async listRoadmaps(): Promise<RoadmapSummary[]> {
-    const response = await apiClient.get<RoadmapDto[] | { items: RoadmapDto[] } | { roadmaps: RoadmapDto[] }>('/api/roadmaps')
-    return pageItems(response.data).map(mapRoadmapDtoToSummary)
+    const response = await apiClient.get<RoadmapDto[]>('/api/roadmaps')
+    return response.data.map(toSummary)
   },
 
   async getRoadmap(id: string): Promise<RoadmapDetail | undefined> {
-    // Check user-roadmaps first, fallback to curated roadmaps endpoint
-    const response = await apiClient.get<UserRoadmapDto | RoadmapDto>(`/api/user-roadmaps/${id}`).catch(() =>
-      apiClient.get<RoadmapDto>(`/api/roadmaps/${id}`)
-    )
+    const dto = await getOrUndefined(id)
+    return dto ? toDetail(dto) : undefined
+  },
 
-    const raw = response.data
-    if (!raw) return undefined
-
-    const dto: RoadmapDto = 'roadmap' in raw && raw.roadmap ? { ...raw.roadmap, nodes: raw.nodes ?? raw.roadmap.nodes } : (raw as RoadmapDto)
-    const summary = mapRoadmapDtoToSummary(dto)
-
-    const rawNodes = dto.nodes || ('nodes' in raw ? (raw as UserRoadmapDto).nodes : []) || []
-    const topics: RoadmapTopic[] = rawNodes.map((node) => ({
-      id: node.id || node.nodeId || node.node_id || '',
-      name: node.title,
-      optional: Boolean(node.optional || node.type === 'optional'),
-      completed: normalizeNodeStatus(node.status) === 'Completed' || normalizeNodeStatus(node.status) === 'Known',
-    }))
-
-    const note = dto.source === 'generated'
-      ? 'This generated roadmap is an AI suggestion. Verify it against trusted domain resources; it is not an official career requirement.'
-      : 'Curated by the Study Partner team. Adapt the sequence to your field and background.'
-
-    return {
-      ...summary,
-      topics,
-      note,
-    }
+  async getGraph(id: string): Promise<RoadmapGraphData | undefined> {
+    const dto = await getOrUndefined(id)
+    return dto?.nodes?.length ? toGraph(dto.nodes) : undefined
   },
 
   async createRoadmap(input: CreateRoadmapInput): Promise<RoadmapDetail> {
     const payload: GenerateRoadmapRequestDto = {
       role: input.role.trim(),
-      category: input.category,
+      category: CATEGORY_KEYS[input.category],
       goal: input.goal.trim(),
     }
-
-    const response = await apiClient.post<RoadmapDto | RoadmapJobStatusDto>('/api/roadmaps/generate', payload)
-    const resData = response.data
-
-    // If backend returns an immediate roadmap
-    if ('role' in resData && resData.role) {
-      const summary = mapRoadmapDtoToSummary(resData as RoadmapDto)
-      const nodes = (resData as RoadmapDto).nodes || []
-      return {
-        ...summary,
-        topics: nodes.map((n) => ({ id: n.id, name: n.title, completed: false, optional: Boolean(n.optional) })),
-        note: 'AI-generated roadmap. Verify suggestions against industry requirements.',
-      }
-    }
-
-    // If backend returns background job status { jobId, status }:
-    // Proposed asynchronous contract: GET /api/roadmaps/jobs/{jobId} or GET /api/roadmaps/generate/{jobId}
-    const jobId = (resData as RoadmapJobStatusDto).jobId || (resData as RoadmapJobStatusDto).job_id
-    if (jobId) {
-      let attempts = 0
-      while (attempts < 15) {
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        attempts++
-        try {
-          const statusRes = await apiClient.get<RoadmapJobStatusDto>(`/api/roadmaps/jobs/${jobId}`).catch(() =>
-            apiClient.get<RoadmapJobStatusDto>(`/api/roadmaps/generate/${jobId}`)
-          )
-          const job = statusRes.data
-          if (job.status === 'completed' && (job.roadmapId || job.roadmap_id)) {
-            const finishedRoadmap = await this.getRoadmap(job.roadmapId || job.roadmap_id!)
-            if (finishedRoadmap) return finishedRoadmap
-          }
-          if (job.status === 'failed') {
-            throw new Error(job.error || 'Roadmap generation failed on the server.')
-          }
-        } catch (err) {
-          if (attempts >= 15) throw err
-        }
-      }
-    }
-
-    // Default synthesized detail while backend finishes
-    const id = `generated-${input.role.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`
-    return {
-      id,
-      role: input.role,
-      category: input.category,
-      description: `Targeted learning progression for ${input.role} shaped around: ${input.goal}.`,
-      topicCount: 6,
-      coreTopics: ['Role foundations', 'Tools and workflows', 'Core application'],
-      optionalTopics: ['Advanced workflows'],
-      progress: 0,
-      source: 'AI-generated mock',
-      color: determineColor(input.category),
-      topics: ['Role foundations', 'Tools and workflows', 'Core application', 'Practical projects', 'Advanced workflows'].map((name, i) => ({
-        id: `gen-node-${i}`,
-        name,
-        optional: i >= 4,
-        completed: false,
-      })),
-      note: 'Roadmaps are learning suggestions, not official career requirements.',
-    }
+    // 202: the local model writes the roadmap in the background (a few minutes on CPU).
+    const response = await apiClient.post<RoadmapDto>('/api/roadmaps/generate', payload)
+    return toDetail(response.data)
   },
 
-  async getGraph(id: string): Promise<RoadmapGraphData | undefined> {
-    const response = await apiClient.get<UserRoadmapDto | RoadmapDto>(`/api/user-roadmaps/${id}`).catch(() =>
-      apiClient.get<RoadmapDto>(`/api/roadmaps/${id}`)
-    )
-
-    const raw = response.data
-    if (!raw) return undefined
-
-    const nodes = (raw as UserRoadmapDto).nodes || (raw as RoadmapDto).nodes || []
-    if (nodes.length > 0) {
-      return mapNodesToGraph(id, nodes)
-    }
-
-    return undefined
+  async retryRoadmap(id: string): Promise<RoadmapDetail> {
+    const response = await apiClient.post<RoadmapDto>(`/api/roadmaps/${id}/retry`)
+    return toDetail(response.data)
   },
 
-  async overrideNodeStatus(roadmapId: string, nodeId: string, status: RoadmapTopicStatus): Promise<void> {
-    const payload = {
-      status: toBackendNodeStatus(status),
-      manual_override: true,
-      manualOverride: true,
-    }
-
-    await apiClient.patch(`/api/user-roadmaps/${roadmapId}/nodes/${nodeId}`, payload)
+  async deleteRoadmap(id: string): Promise<void> {
+    await apiClient.delete(`/api/roadmaps/${id}`)
   },
 
-  async startNodeSession(roadmapId: string, nodeId: string): Promise<{ id: string; topic: string }> {
-    const response = await apiClient.post<NodeSessionResponseDto>(`/api/user-roadmaps/${roadmapId}/nodes/${nodeId}/sessions`)
-    const data = response.data
-    return {
-      id: data.sessionId || data.session_id || 'session-general-01',
-      topic: data.topic || 'Roadmap node study',
-    }
+  async overrideNodeStatus(roadmapId: string, nodeId: string, status: RoadmapTopicStatus | null): Promise<void> {
+    await apiClient.patch(`/api/roadmaps/${roadmapId}/nodes/${nodeId}`, {
+      status: status ? toBackendStatus(status) : null,
+    })
+  },
+
+  async startNodeSession(roadmapId: string, nodeId: string): Promise<NodeSession> {
+    const response = await apiClient.post<NodeSessionResponseDto>(`/api/roadmaps/${roadmapId}/nodes/${nodeId}/sessions`)
+    return { sessionId: response.data.sessionId, topic: response.data.topic, knowledgeMode: response.data.knowledgeMode }
   },
 
   async followRoadmap(roadmapId: string): Promise<{ userRoadmapId: string }> {
-    const response = await apiClient.post<{ id?: string; userRoadmapId?: string; user_roadmap_id?: string }>('/api/user-roadmaps', {
-      roadmap_id: roadmapId,
-      roadmapId,
-    })
-    return {
-      userRoadmapId: response.data.id || response.data.userRoadmapId || response.data.user_roadmap_id || roadmapId,
-    }
+    await apiClient.put(`/api/roadmaps/${roadmapId}/follow`)
+    return { userRoadmapId: roadmapId }
   },
 }

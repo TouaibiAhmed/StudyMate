@@ -32,10 +32,19 @@ export type RoadmapNodeDto = {
   evidence_summary?: string | null
   manualOverride?: boolean
   manual_override?: boolean
+  conceptName?: string | null
+  courseId?: ApiId | null
 }
 
 export type RoadmapDto = {
   id: ApiId
+  slug?: string | null
+  note?: string
+  goal?: string | null
+  following?: boolean
+  generationProgress?: number
+  stage?: string | null
+  error?: string | null
   role: string
   domain?: string | null
   category?: RoadmapCategory

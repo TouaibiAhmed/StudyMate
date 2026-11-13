@@ -215,6 +215,32 @@ mostly ready by the time the student has read the feedback.
   partially-correct verdict with only off-rubric gaps becomes correct.
 * Measured on the dev laptop (CPU only): 5 questions written in ~3.5 min, graded in ~2.5 min.
 
+## 7d. Roadmaps (step 7)
+
+* **Curated roadmaps** live in `app/modules/roadmaps/curated.py` (Backend, Frontend, Data Analyst,
+  ML Engineer, Accountant), written for the project. They are seeded idempotently on first request;
+  nodes are matched by `key`, so bumping a roadmap's `version` updates content and keeps progress.
+  Resources are *kinds* of resources to look for, never links.
+* **Generated roadmaps** (`POST /api/roadmaps/generate`, 202) are private to their owner. The worker
+  runs two short passes: the outliner proposes topics in learning order with prerequisite ids, then
+  the detailer writes descriptions and resource kinds 6 topics at a time (missing ones retried once).
+  Code validates the graph: duplicates dropped, only edges to earlier topics kept, so it is always a
+  DAG (`graph.find_cycle` guards it). Layout (left to right by prerequisite depth) is computed by
+  code. One generation at a time per student, max 20 kept. Note: "AI suggestion, verify it".
+* **Node status is derived on read**, never stored: a manual mark (`known`, `completed`, ...) wins;
+  otherwise the best of (a) answers graded in study sessions started from that node (2 correct =
+  completed) and (b) the learning-profile status of a concept from the student's own courses that
+  fits the node. Roadmap progress = mean progress of core nodes.
+* **Concept fit:** e5-small similarity alone is not discriminative (unrelated pairs score 0.85+), so
+  a concept fits a node when its name's words appear in the node text and similarity ≥ 0.80, or
+  similarity ≥ 0.90. Calibrated on real pairs (e.g. Backpropagation → "Neural networks and deep
+  learning"; Photosynthesis → nothing).
+* **Study a node:** `POST /api/roadmaps/{id}/nodes/{nodeId}/sessions` starts a course-grounded session
+  on the fitting concept when there is one, otherwise a general-knowledge session on the topic
+  (labelled as such). The session id is kept on the node so its answers count there.
+* Following (`PUT/DELETE /api/roadmaps/{id}/follow`, automatic on any interaction) is the interest
+  signal step 9 uses.
+
 ## 8. Recommendations (step 9)
 
 Recommends **platform catalog items** (catalog courses and curated roadmaps). Never other

@@ -60,7 +60,7 @@ export const mockRoadmapService: RoadmapService = {
       id: `generated-${input.role.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`,
       role: input.role, category: input.category,
       description: `A starting point for building toward ${input.role.toLowerCase()} work, shaped around: ${input.goal}.`,
-      topicCount: 6, coreTopics: ['Role fundamentals', 'Tools and workflows', 'Portfolio practice', 'Communication'], optionalTopics: ['Adjacent skills', 'Interview preparation'], progress: 0, source: 'AI-generated mock', color: 'purple',
+      topicCount: 6, coreTopics: ['Role fundamentals', 'Tools and workflows', 'Portfolio practice', 'Communication'], optionalTopics: ['Adjacent skills', 'Interview preparation'], progress: 0, source: 'AI-generated', color: 'purple',
       note: 'This generated roadmap is a mock suggestion. Verify it against current job descriptions, mentors, and official learning resources; it is not an official career requirement.',
       topics: ['Role fundamentals', 'Tools and workflows', 'Portfolio practice', 'Communication', 'Adjacent skills', 'Interview preparation'].map((name, index) => ({ id: `generated-topic-${index}`, name, optional: index > 3, completed: false })),
     }
@@ -73,16 +73,17 @@ export const mockRoadmapService: RoadmapService = {
     return graph ? { topics: graph.topics.map((topic) => ({ ...topic })), edges: graph.edges.map((edge) => ({ ...edge })) } : undefined
   },
 
-  async overrideNodeStatus(roadmapId: string, nodeId: string, status: RoadmapTopicStatus) {
+  async overrideNodeStatus(roadmapId: string, nodeId: string, status: RoadmapTopicStatus | null) {
     const graph = roadmapGraphData[roadmapId]
     const topic = graph?.topics.find((t) => t.id === nodeId)
-    if (topic) topic.status = status
+    if (topic && status) { topic.status = status; topic.manualOverride = true }
+    else if (topic) topic.manualOverride = false
   },
 
   async startNodeSession(roadmapId: string, nodeId: string) {
     const graph = roadmapGraphData[roadmapId]
     const topic = graph?.topics.find((t) => t.id === nodeId)
-    return { id: 'session-general-01', topic: topic?.title || 'Roadmap Topic' }
+    return { sessionId: 'session-general-01', topic: topic?.title || 'Roadmap Topic' }
   },
 
   async followRoadmap(roadmapId: string) {

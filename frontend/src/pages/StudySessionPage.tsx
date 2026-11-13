@@ -306,7 +306,7 @@ function PreparingSession({ topic, onExit }: { topic: string; onExit: () => void
       <section className="question-card preparing-card" role="status" aria-live="polite">
         <div className="question-label"><Sparkles size={16} /> Preparing your session</div>
         <h2>Writing a first question about {topic}…</h2>
-        <p>StudyMate is reading your course material and writing a question with hints. On a local model this can take a minute or two; this page updates by itself.</p>
+        <p>StudyMate is writing a question with hints (from your course material when the topic belongs to one of your courses). On a local model this can take a minute or two; this page updates by itself.</p>
         <ProgressBar value={35} />
       </section>
     </div>

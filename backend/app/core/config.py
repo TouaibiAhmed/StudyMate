@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     exam_max_questions: int = 30
     exam_max_minutes: int = 180
     roadmap_max_nodes: int = 30
+    # A roadmap topic counts a concept of the student's courses when the concept's words appear in the
+    # topic text and the embeddings are at least loosely similar, or when they are very similar.
+    roadmap_concept_lexical_min_score: float = 0.80
+    roadmap_concept_min_score: float = 0.90
 
     # --- Worker ----------------------------------------------------------------
     worker_poll_interval_s: float = 1.0

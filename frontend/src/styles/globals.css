@@ -1311,3 +1311,10 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; }
 @media (max-width: 680px) { .profile-card, .settings-card { padding: 21px 19px; } .settings-form { grid-template-columns: 1fr; } .settings-full { grid-column: auto; max-width: none; } .settings-actions { align-items: flex-start; flex-direction: column; } .settings-actions > div { width: 100%; justify-content: flex-end; margin-left: 0; } .settings-security { padding: 13px; } }
 .generation-note { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--paper); color: var(--muted); font-size: .85rem; line-height: 1.5; }
 .generation-status { font-style: normal; color: var(--muted); }
+
+/* Roadmaps: generation state */
+.roadmap-card-status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .82rem; flex: 1; }
+.roadmap-card-status.failed { color: var(--danger, #b4483c); }
+.roadmap-generation-panel { display: grid; gap: 12px; }
+.roadmap-generation-panel h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.05rem; }
+.roadmap-detail-hero .roadmap-delete { margin-left: auto; align-self: flex-start; }

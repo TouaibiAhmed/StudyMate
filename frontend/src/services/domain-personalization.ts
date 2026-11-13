@@ -27,10 +27,10 @@ const domainRoadmapCategories: Record<string, RoadmapCategory[]> = {
 const specializationRoadmapIds: Record<string, string[]> = {
   AI: ['machine-learning-engineer'],
   'Data Science': ['data-analyst', 'machine-learning-engineer'],
-  'Software Engineering': ['backend-developer'],
+  'Software Engineering': ['backend-developer', 'frontend-developer'],
   Cybersecurity: ['backend-developer'],
   Networks: ['backend-developer'],
-  Finance: ['data-analyst'],
+  Finance: ['data-analyst', 'accountant'],
   Marketing: ['data-analyst', 'product-operations'],
 }
 
@@ -46,12 +46,12 @@ export function prioritizeCourses<T extends Pick<CourseSummary, 'domain'> & { su
   return [...courses].sort((a, b) => Number(isCourseRelevant(b, profile)) - Number(isCourseRelevant(a, profile)))
 }
 
-export function isRoadmapRelevant(roadmap: Pick<RoadmapSummary, 'category' | 'id'>, profile?: LearningProfile) {
-  const specializationMatches = profile?.specialization ? specializationRoadmapIds[profile.specialization]?.includes(roadmap.id) : false
+export function isRoadmapRelevant(roadmap: Pick<RoadmapSummary, 'category' | 'id' | 'slug'>, profile?: LearningProfile) {
+  const specializationMatches = profile?.specialization ? specializationRoadmapIds[profile.specialization]?.includes(roadmap.slug ?? roadmap.id) : false
   return Boolean(specializationMatches || (profile?.domain && domainRoadmapCategories[profile.domain]?.includes(roadmap.category)))
 }
 
-export function prioritizeRoadmaps<T extends Pick<RoadmapSummary, 'category' | 'id'>>(roadmaps: T[], profile?: LearningProfile) {
+export function prioritizeRoadmaps<T extends Pick<RoadmapSummary, 'category' | 'id' | 'slug'>>(roadmaps: T[], profile?: LearningProfile) {
   return [...roadmaps].sort((a, b) => Number(isRoadmapRelevant(b, profile)) - Number(isRoadmapRelevant(a, profile)))
 }
 

@@ -47,6 +47,7 @@ VITE_STUDY_SESSIONS_DATA_MODE=api
 VITE_PROGRESS_DATA_MODE=api
 VITE_STUDY_TOOLS_DATA_MODE=api
 VITE_EXAMS_DATA_MODE=api
+VITE_ROADMAPS_DATA_MODE=api
 ```
 
 With `VITE_API_BASE_URL` empty, the Vite dev server proxies `/api/*` to `localhost:8000`, so the

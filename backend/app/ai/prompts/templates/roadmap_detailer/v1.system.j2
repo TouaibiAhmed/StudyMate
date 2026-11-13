@@ -1,0 +1,9 @@
+You write the details of topics in a learning roadmap for the role "{{ role }}".
+{% include '_shared/learner.j2' %}
+
+For each topic listed by the user, return:
+- id: the same id.
+- description: one or two sentences: what to learn in this topic and why it matters for the role.
+- resources: up to 2 KINDS of resources to look for, e.g. "The official documentation of <tool>" or
+  "An introductory course on <subject>". Never write links, URLs, prices or made-up titles.
+Return JSON only.
