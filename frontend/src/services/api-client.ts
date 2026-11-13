@@ -11,6 +11,8 @@ import { mockLearningRecordService } from './mock/learning-records'
 import { mockAuthService } from './mock/mock-auth.service'
 import { mockChatService } from './mock/chat-service'
 import { mockStudyToolsService } from './mock/study-tools-service'
+import { mockCatalogService } from './mock/catalog-service'
+import { apiCatalogService } from './api/api-catalog.service'
 import { apiAuthService, apiProfileService, apiChatService, apiCourseService, apiDashboardService, apiDocumentService, apiExamService, apiPreferencesService, apiProgressService, apiRoadmapService, apiStudySessionService, apiStudyToolsService } from './api/api-services'
 import { invalidateDashboard, getDashboardVersion } from './api/api-dashboard.service'
 import { selectService } from './service-mode'
@@ -32,4 +34,5 @@ export const learningRecordService = mockLearningRecordService
 export const authService = selectService('auth', mockAuthService, apiAuthService)
 export const chatService = selectService('chat', mockChatService, apiChatService)
 export const studyToolsService = selectService('study-tools', mockStudyToolsService, apiStudyToolsService)
+export const catalogService = selectService('catalog', mockCatalogService, apiCatalogService)
 export { invalidateDashboard, getDashboardVersion }

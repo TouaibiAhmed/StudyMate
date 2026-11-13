@@ -262,25 +262,38 @@ mostly ready by the time the student has read the feedback.
 * Also: continue learning (latest session), courses by recent study, concepts to practise, recent
   sessions, the most recently followed roadmap with its next core topic, and an exam suggestion.
 
-## 8. Recommendations (step 9)
+## 8. Catalog and recommendations (step 9)
 
-Recommends **platform catalog items** (catalog courses and curated roadmaps). Never other
-students' content; generated roadmaps stay private.
+Recommends **platform items only**: catalog courses and curated roadmaps. Never other students'
+content; generated roadmaps stay private (not even recommended to their owner).
 
-* **Item vectors:** embed each catalog item (title, description, concepts/nodes) once.
-* **Interest vector:** weighted, recency-decayed mean of embeddings of what the student engages
-  with: profile field + target role (cold start), followed roadmaps and completed nodes, own
-  courses and their concepts, study activity. Saved/dismissed feedback adjusts it.
-* **Score:** cosine similarity + rule boosts: level fit, "natural next step" (prerequisite
-  roadmaps mostly done), coverage (share of an item's concepts/nodes the student already studies),
-  minus exclusions (already followed/enrolled, dismissed). MMR re-ranking for variety.
-* **Explanations:** templated reasons ("Because you follow Data Analyst", "Covers 7 topics from
-  your Deep Learning course"). No LLM call.
-* **Freshness:** worker job `recommendations.refresh` runs on relevant events and writes
-  `user_recommendations`; the API reads precomputed rows. Impressions/clicks/dismissals are
-  logged for evaluation.
-* **API:** `GET /api/recommendations?type=course|roadmap`, `POST /api/recommendations/{id}/feedback`,
-  `GET /api/catalog/courses`, `POST /api/catalog/courses/{id}/enroll`.
+* **Catalog** (`app/modules/catalog/content.py`): 16 courses written for the project across the five
+  profile domains, each with 6-7 ordered concepts. Seeded idempotently (by slug + version).
+  `POST /api/catalog/courses/{id}/enroll` copies a course into the student's library once
+  (`courses.catalog_course_id`), with its concepts embedded and chained as prerequisites. Sessions
+  run at once in general-knowledge mode (labelled) and become course-grounded when the student uploads
+  material; extraction keeps the catalog concepts and adds new ones.
+* **Item vectors**: one embedding per catalog course / curated roadmap (title, description, topics),
+  cached in `recommendation_items` and rebuilt only when the text hash changes.
+* **Interest signals**, each an embedding + weight + reason: profile field (1.0), target role (1.2),
+  the student's own courses (1.5 each, 6 most recent), followed roadmaps (1.5), concepts with
+  evidence in the last 30 days (1.0). Score = cosine(weighted mean, item) + 0.02 domain boost.
+* **Exclusions**: enrolled catalog courses, courses the student made under the same title, followed
+  roadmaps, dismissed items (`POST /api/recommendations/feedback`, undo with `DELETE`).
+* **Variety**: MMR re-ranking (lambda 0.7) so the list is not five variations of one topic.
+* **Explanations** are rank-based: a signal is named as the reason only when the item is in that
+  signal's top fifth of the whole catalog (top 1 for the 5 roadmaps). Cosine values from the small
+  embedding model are compressed (unrelated pairs score 0.8+), so absolute thresholds produced
+  misleading reasons in testing ("Principles of Marketing: matches your field: Biology"). Items no
+  signal backs say "Broadens your skills beyond your current topics".
+* Computed on request (a few dozen items, ~100 ms with cached vectors), so suggestions follow the
+  student's latest activity without a refresh job. Checked with three personas (ML, accounting,
+  biology) using the real embedding model; see `tests/test_recommendations.py`.
+* **API:** `GET /api/recommendations?type=course|roadmap&limit=`, `POST|DELETE
+  /api/recommendations/feedback`, `GET /api/catalog/courses?query=&domain=`,
+  `GET /api/catalog/courses/{id}`, `POST /api/catalog/courses/{id}/enroll`.
+* **UI:** "Recommended for you" strips on Courses and Roadmaps (with reason and "not interested"),
+  and a Discover tab on Courses to browse the catalog and add courses.
 
 ## 9. API conventions
 

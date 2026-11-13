@@ -1325,3 +1325,25 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; }
 .week-day.today small { color: var(--ink, inherit); font-weight: 700; }
 .week-day.future { opacity: .45; }
 .week-goal { display: grid; gap: 6px; margin-top: 14px; color: var(--muted); font-size: .85rem; }
+
+/* Catalog and recommendations */
+.page-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); }
+.page-tabs button { padding: 9px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.page-tabs button.selected { color: var(--ink, inherit); border-bottom-color: var(--forest, currentColor); }
+.recommendation-strip { display: grid; gap: 12px; }
+.recommendation-strip .eyebrow { display: inline-flex; align-items: center; gap: 5px; }
+.recommendation-cards, .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.recommendation-card, .catalog-card { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-md, 14px); background: var(--surface, #fff); }
+.recommendation-card h3, .catalog-card h3 { margin: 0; font-size: 1.02rem; }
+.recommendation-card p, .catalog-card p { margin: 0; color: var(--muted); font-size: .88rem; line-height: 1.45; }
+.recommendation-card .button { margin-top: auto; align-self: flex-start; }
+.recommendation-reason { display: flex; align-items: center; gap: 6px; color: var(--forest, inherit) !important; font-weight: 600; font-size: .82rem !important; }
+.recommendation-card-dismiss { position: absolute; top: 10px; right: 10px; padding: 4px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.recommendation-card-dismiss:hover { background: var(--paper, rgba(0,0,0,.05)); }
+.catalog-browser { display: grid; gap: 18px; }
+.catalog-concepts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.catalog-concepts li { padding: 3px 8px; border-radius: 999px; background: var(--paper, rgba(0,0,0,.04)); color: var(--muted); font-size: .76rem; }
+.catalog-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 6px; }
+.catalog-card-footer small { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.catalog-card.highlighted { border-color: var(--forest, currentColor); box-shadow: 0 0 0 3px var(--sage-soft, rgba(0,128,0,.12)); }
+.discover-hint { margin: 0; }

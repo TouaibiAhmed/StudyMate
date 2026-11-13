@@ -12,6 +12,7 @@ import { isRoadmapRelevant, prioritizeRoadmaps } from '../services/domain-person
 import { classifyAiError } from '../services/ai-error'
 import { ApiError } from '../services/http-client'
 import { getDataMode } from '../services/service-mode'
+import { RecommendationStrip } from '../features/recommendations/RecommendationStrip'
 
 const categories: Array<'All' | RoadmapCategory> = ['All', 'Data', 'Engineering', 'Machine learning', 'Business']
 
@@ -60,6 +61,7 @@ export function RoadmapsPage() {
   return <div className="page-stack roadmaps-page">
     <div className="page-intro"><div><span className="eyebrow">Structured learning</span><h2>Learning roadmaps</h2><p>Choose a thoughtful starting point for the role you want to grow toward.</p></div><button className="button" onClick={() => setDialogOpen(true)}><Plus size={16} /> Request custom roadmap</button></div>
     <div className="roadmap-disclaimer"><Sparkles size={16} /><span>Roadmaps are learning suggestions, not official career requirements. Verify generated suggestions against current job descriptions and trusted sources.</span></div>
+    <RecommendationStrip kind="roadmap" limit={3} />
     <section className="course-toolbar roadmap-toolbar" aria-label="Roadmap filters"><label className="search-box course-search"><Search size={17} /><input placeholder="Search roles" aria-label="Search roles" value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="subject-filters" role="group" aria-label="Filter by roadmap category"><button className={recommendedOnly ? 'selected' : ''} onClick={() => setRecommendedOnly(true)} disabled={!profile?.domain}>For you</button><button className={!recommendedOnly && category === 'All' ? 'selected' : ''} onClick={() => { setRecommendedOnly(false); setCategory('All') }}>All roadmaps</button>{categories.slice(1).map((option) => <button key={option} className={!recommendedOnly && category === option ? 'selected' : ''} onClick={() => { setRecommendedOnly(false); setCategory(option) }}>{option}</button>)}</div></section>
     {profile?.domain && recommendedOnly && <p className="personalization-note">Prioritized for <strong>{profile.domain}</strong>{profile.specialization ? ` · ${profile.specialization}` : ''}. <button className="text-button" onClick={() => setRecommendedOnly(false)}>Explore every roadmap</button></p>}
         {loading ? <RoadmapSkeleton /> : error ? <EmptyState title="Roadmaps could not load" text={error} action={<button className="button button-secondary"     onClick={() => loadRoadmaps()}>Try again</button>} /> : visible.length ? <div className="roadmap-library">{visible.map((roadmap) => <RoadmapCard roadmap={roadmap} key={roadmap.id} />)}</div> : <EmptyState title="No roadmaps match that search" text="Try another role or category, or request a custom roadmap." />}

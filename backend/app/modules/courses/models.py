@@ -24,6 +24,8 @@ class Course(IdMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(16), default="active")
     # idle | processing | ready | failed - concept extraction across the course's documents
     concepts_status: Mapped[str] = mapped_column(String(16), default="idle")
+    # Set when the course was created from a platform catalog course (step 9).
+    catalog_course_id: Mapped[str | None] = mapped_column(ForeignKey("catalog_courses.id", ondelete="SET NULL"))
 
 
 class Concept(IdMixin, TimestampMixin, Base):

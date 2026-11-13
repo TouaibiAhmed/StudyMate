@@ -1,9 +1,11 @@
 import { ArrowRight, BookOpen, Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { EmptyState } from '../components/feedback/EmptyState'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { CourseCreationDialog } from '../features/courses/CourseCreationDialog'
+import { CatalogBrowser } from '../features/catalog/CatalogBrowser'
+import { RecommendationStrip } from '../features/recommendations/RecommendationStrip'
 import { courseService } from '../services/api-client'
 import type { CourseSubject, CourseSummary, CreateCourseInput } from '../services/contracts/courses'
 import { isCourseRelevant, prioritizeCourses } from '../services/domain-personalization'
@@ -22,6 +24,9 @@ export function CoursesPage() {
   const [actionError, setActionError] = useState('')
   const [profile, setProfile] = useState<StudentProfile>()
   const [recommendedOnly, setRecommendedOnly] = useState(false)
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'discover' || params.get('catalog') ? 'discover' : 'mine'
+  const showTab = (next: 'mine' | 'discover') => setParams(next === 'discover' ? { tab: 'discover' } : {})
 
   function loadCourses(showLoading = true) {
     if (showLoading) { setLoading(true); setError('') }
@@ -55,10 +60,15 @@ export function CoursesPage() {
   return (
     <div className="page-stack courses-page">
       <div className="page-intro courses-intro"><div><span className="eyebrow">Your learning library</span><h2>Courses</h2><p>Curated paths for curious minds, plus space for your own questions.</p></div><button className="button" onClick={() => setDialogOpen(true)}><Plus size={16} /> Create course</button></div>
+      <div className="page-tabs" role="tablist" aria-label="Courses"><button role="tab" aria-selected={tab === 'mine'} className={tab === 'mine' ? 'selected' : ''} onClick={() => showTab('mine')}>My courses</button><button role="tab" aria-selected={tab === 'discover'} className={tab === 'discover' ? 'selected' : ''} onClick={() => showTab('discover')}>Discover</button></div>
+      {tab === 'discover' ? <CatalogBrowser highlightId={params.get('catalog')} /> : <>
       <section className="course-toolbar" aria-label="Course filters"><label className="search-box course-search"><Search size={17} /><input placeholder="Search courses" aria-label="Search courses" value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="subject-filters" role="group" aria-label="Filter by subject"><button className={recommendedOnly ? 'selected' : ''} onClick={() => setRecommendedOnly(true)} disabled={!profile?.domain}>For you</button><button className={!recommendedOnly && subject === 'All' ? 'selected' : ''} onClick={() => { setRecommendedOnly(false); setSubject('All') }}>All domains</button>{subjects.slice(1).map((option) => <button key={option} className={!recommendedOnly && subject === option ? 'selected' : ''} onClick={() => { setRecommendedOnly(false); setSubject(option) }}>{option}</button>)}</div></section>
       {profile?.domain && recommendedOnly && <p className="personalization-note">Showing courses relevant to <strong>{profile.domain}</strong>{profile.specialization ? ` · ${profile.specialization}` : ''}. <button className="text-button" onClick={() => setRecommendedOnly(false)}>Explore every domain</button></p>}
       {actionError && <p className="form-error" role="alert">{actionError}</p>}
       {loading ? <CourseListSkeleton /> : error ? <EmptyState title="Your courses could not load" text={error} action={<button className="button button-secondary"       onClick={() => loadCourses()}>Try again</button>} /> : visibleCourses.length === 0 ? <EmptyState title={courses.length ? 'No courses match that search' : 'No courses yet'} text={courses.length ? 'Try another subject or create a course for the question you want to explore.' : 'Create your first course to start building a focused study library.'} /> : <div className="course-cards course-card-list">{visibleCourses.map((course, index) => <CourseCard course={course} featured={index === 0} key={course.id} />)}</div>}
+      {!loading && !error && <RecommendationStrip kind="course" limit={3} onEnrolled={() => loadCourses(false)} />}
+      {!loading && !error && <p className="discover-hint"><button className="text-button" onClick={() => showTab('discover')}>Browse the full course catalog</button></p>}
+      </>}
       <CourseCreationDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={handleCreate} />
     </div>
   )
