@@ -1,0 +1,8 @@
+{% for item in items %}
+Item {{ loop.index }}
+Question: {{ item.question }}
+Required ideas: {{ item.required_ideas | join("; ") }}
+Model answer: {{ item.model_answer }}
+<student_answer>{{ item.answer }}</student_answer>
+
+{% endfor %}

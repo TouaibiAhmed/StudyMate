@@ -46,6 +46,15 @@ _VERDICT_VALUE = {Verdict.CORRECT: 1.0, Verdict.PARTIALLY_CORRECT: 0.5, Verdict.
 _DIFFICULTY_WEIGHT = {Difficulty.INTRODUCTORY: 0.8, Difficulty.INTERMEDIATE: 1.0, Difficulty.ADVANCED: 1.2}
 _CONFIDENCE_WEIGHT = {"high": 1.0, "medium": 0.85, "low": 0.6}
 HALF_LIFE_DAYS = 14.0
+# How much an answer says about understanding, by the conditions it was given in.
+CONDITION_WEIGHT = {
+    "practice": 1.0,
+    "exam": 1.5,  # independent recall under exam conditions (doc 11.4)
+    "quiz_short": 0.7,  # written answer in a self-check quiz
+    "quiz_choice": 0.3,  # multiple choice / true-false: can be guessed
+}
+# Only these count as "independent successes" towards good evidence.
+INDEPENDENT_CONDITIONS = {"practice", "exam"}
 # Shown as the bar in the UI; levels, not percentages of knowledge.
 STATUS_LEVEL = {
     ConceptStatus.NOT_ENOUGH_EVIDENCE: 0,
@@ -62,7 +71,7 @@ class EvidencePoint:
     difficulty: str = Difficulty.INTERMEDIATE
     hints_used: int = 0
     confidence: str = "medium"
-    exam: bool = False
+    conditions: str = "practice"  # practice | exam | quiz_short | quiz_choice
     general_knowledge: bool = False
 
 
@@ -84,8 +93,7 @@ def evidence_weight(p: EvidencePoint, now: datetime) -> float:
     w = _DIFFICULTY_WEIGHT.get(p.difficulty, 1.0)  # StrEnum keys match their plain-string values
     w *= _CONFIDENCE_WEIGHT.get(p.confidence, 0.85)
     w *= max(0.4, 1.0 - 0.2 * p.hints_used)  # correct after hints is weaker evidence
-    if p.exam:
-        w *= 1.5  # independent recall under exam conditions (doc 11.4)
+    w *= CONDITION_WEIGHT.get(p.conditions, 1.0)
     if p.general_knowledge:
         w *= 0.8  # model-written rubric, lower default confidence (doc 10.5)
     age_days = max(0.0, (now - p.created_at).total_seconds() / 86400)
@@ -101,7 +109,8 @@ def concept_state(points: list[EvidencePoint], now: datetime) -> ConceptState:
     weights = [evidence_weight(p, now) for p in informative]
     estimate = sum(w * _VERDICT_VALUE[Verdict(p.verdict)] for w, p in zip(weights, informative, strict=True)) / sum(
         weights)
-    independent = sum(1 for p in informative if p.verdict == Verdict.CORRECT and p.hints_used == 0)
+    independent = sum(1 for p in informative if p.verdict == Verdict.CORRECT and p.hints_used == 0
+                      and p.conditions in INDEPENDENT_CONDITIONS)
     latest = max(informative, key=lambda p: p.created_at)
 
     if estimate < 0.45:

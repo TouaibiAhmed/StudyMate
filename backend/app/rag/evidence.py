@@ -6,6 +6,7 @@ Unknown labels are dropped, so a hallucinated reference can never reach the stud
 general-knowledge mode can never show one.
 """
 
+import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -73,3 +74,23 @@ class EvidenceSet:
 
 def label_for(index: int) -> str:
     return f"E{index + 1}"
+
+
+_LABEL_REFS = re.compile(
+    r"\s*\(\s*(?:see\s+)?(?:excerpts?\s+)?E\d+(?:\s*(?:,|and|&)\s*E\d+)*\s*\)"  # "(E1)", "(see excerpt E2)"
+    r"|\s*\[\s*E\d+(?:\s*,\s*E\d+)*\s*\]",  # "[E1, E2]"
+    re.IGNORECASE,
+)
+_LABEL_WORDS = re.compile(r"\b(?:the\s+)?(?:course\s+)?excerpts?\s+E\d+(?:\s*(?:,|and|&)\s*E\d+)*", re.IGNORECASE)
+_EXCERPT_WORD = re.compile(r"\b(?:the\s+)?course\s+excerpts?\b|\bthe\s+excerpts?\b", re.IGNORECASE)
+
+
+def scrub_labels(text: str) -> str:
+    """Remove internal excerpt ids from text shown to students ("as stated in excerpt E1" ->
+    "as stated in the course material"). Citations are shown separately, from stored metadata."""
+    if not text:
+        return text
+    text = _LABEL_REFS.sub("", text)
+    text = _LABEL_WORDS.sub("the course material", text)
+    text = _EXCERPT_WORD.sub("the course material", text)
+    return re.sub(r"\s+([.,;:])", r"\1", text).strip()

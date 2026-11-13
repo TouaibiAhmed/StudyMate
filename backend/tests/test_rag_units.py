@@ -85,3 +85,13 @@ def test_phrase_query_pairs_adjacent_words_safely():
     assert phrase_query("How do I pick a learning-rate?") == expected
     assert phrase_query("'; DROP TABLE chunks; --") == "drop <-> table | table <-> chunks"  # only letters reach SQL
     assert phrase_query("x") == "xxnomatchxx"
+
+
+def test_scrub_labels_removes_internal_excerpt_ids():
+    from app.rag.evidence import scrub_labels
+
+    assert scrub_labels("Correct, as stated in excerpt E1.") == "Correct, as stated in the course material."
+    assert scrub_labels("Mentioned in the course excerpt.") == "Mentioned in the course material."
+    text = "L1 adds the sum (E2). Uses the chain rule [E1, E3]."
+    assert scrub_labels(text) == "L1 adds the sum. Uses the chain rule."
+    assert scrub_labels("Plain text stays [1].") == "Plain text stays [1]."

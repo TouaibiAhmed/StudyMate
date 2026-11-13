@@ -15,7 +15,7 @@ from app.ai.llm.client import CallMeta, LLMClient
 from app.ai.llm.types import ChatMessage, GenerationOptions, ModelTier
 from app.ai.prompts.registry import get_prompt
 from app.core.schemas import SourceReference
-from app.rag.evidence import EvidenceSet, KnowledgeMode
+from app.rag.evidence import EvidenceSet, KnowledgeMode, scrub_labels
 
 PROMPT = "chat"
 HISTORY_TURNS = 6
@@ -77,7 +77,7 @@ def finalize_answer(text: str, evidence: EvidenceSet) -> tuple[str, list[SourceR
             numbers.append(str(order.index(label) + 1))
         return f"[{', '.join(dict.fromkeys(numbers))}]" if numbers else ""
 
-    cleaned = _MARKER.sub(replace, text)
+    cleaned = scrub_labels(_MARKER.sub(replace, text))  # also "according to excerpt E2" in prose
     cleaned = re.sub(r"[ \t]+([.,;:!?])", r"\1", cleaned)  # "word [E9]." -> "word."
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned).strip()
     return cleaned, evidence.citations(order)

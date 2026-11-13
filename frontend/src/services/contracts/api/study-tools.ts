@@ -27,6 +27,8 @@ export type SummaryDto = {
   sourceDocumentIds?: ApiId[] | null
   sources: ApiSourceReference[]
   sections: Array<{ heading: string; points: string[] }>
+  progress?: number
+  stage?: string | null
   error?: string | null
   createdAt: IsoTimestamp
   updatedAt: IsoTimestamp
@@ -73,6 +75,8 @@ export type QuizDto = {
   sourceDocumentIds?: ApiId[] | null
   sources: ApiSourceReference[]
   questions: QuizQuestionDto[]
+  progress?: number
+  stage?: string | null
   error?: string | null
   createdAt: IsoTimestamp
   updatedAt: IsoTimestamp
@@ -122,6 +126,7 @@ export type QuizResultDto = {
     answer?: string | null
     correctAnswer?: string | null
     explanation?: string | null
+    feedback?: string | null
     isCorrect: boolean
   }>
   createdAt: IsoTimestamp

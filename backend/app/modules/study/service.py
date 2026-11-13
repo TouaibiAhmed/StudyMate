@@ -44,6 +44,7 @@ from app.modules.study.schemas import (
 )
 from app.orchestration.budget import BudgetExceeded
 from app.orchestration.state_machine import StateMachine
+from app.rag.evidence import scrub_labels
 from app.rag.retriever import load_evidence
 
 GENERATE_JOB = "study.generate_activity"
@@ -246,8 +247,11 @@ def _consistent(ev: AnswerEvaluation, general_knowledge: bool, rubric: dict | No
         verdict = "partially_correct"  # "correct" with missing ideas is not correct
     if general_knowledge and confidence == "high":
         confidence = "medium"  # model-written rubric without course material
-    return ev.model_copy(update={"verdict": verdict, "confidence": confidence, "gaps": gaps,
-                                 "strengths": strengths})
+    return ev.model_copy(update={
+        "verdict": verdict, "confidence": confidence,
+        "gaps": [scrub_labels(g) for g in gaps], "strengths": [scrub_labels(s) for s in strengths],
+        "misconception": scrub_labels(ev.misconception) if ev.misconception else None,
+    })
 
 
 def _rule_based(answer: str) -> AnswerEvaluation | None:

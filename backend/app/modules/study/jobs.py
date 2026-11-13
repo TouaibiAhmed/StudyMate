@@ -19,7 +19,7 @@ from app.modules.profile.models import StudentProfile
 from app.modules.study import learning
 from app.modules.study.models import Activity, Attempt, Evaluation, StudySession
 from app.modules.study.service import GENERATE_JOB, SESSION_FLOW, SessionState
-from app.rag.evidence import EvidenceSet
+from app.rag.evidence import EvidenceSet, scrub_labels
 from app.rag.interfaces import RetrievalParams, RetrievalScope
 from app.rag.retriever import PgVectorRetriever
 
@@ -112,8 +112,9 @@ async def generate_activity(ctx: JobContext) -> dict:
             return {"skipped": "session closed while generating"}
         db.add(Activity(
             session_id=s.id, concept_id=s.concept_id, sequence=sequence, activity_type=step.activity_type.value,
-            difficulty=step.difficulty.value, status="ready", reason=step.reason, prompt=spec.question,
-            context=spec.context, hints=spec.hints, explanation=spec.explanation,
+            difficulty=step.difficulty.value, status="ready", reason=step.reason, prompt=scrub_labels(spec.question),
+            context=scrub_labels(spec.context) if spec.context else None, hints=[scrub_labels(h) for h in spec.hints],
+            explanation=scrub_labels(spec.explanation),
             rubric=spec.rubric.model_dump(), knowledge_mode=run.knowledge_mode.value,
             sources=[c.model_dump(by_alias=True) for c in run.citations],
             source_chunk_ids=evidence.chunk_ids, prompt_version=run.prompt_id, model=run.model,

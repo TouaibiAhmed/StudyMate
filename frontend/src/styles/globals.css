@@ -1309,3 +1309,5 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; }
 @media (max-width: 420px) { .onboarding-actions { align-items: flex-start; flex-wrap: wrap; } .onboarding-actions .button:last-child { margin-left: auto; } .onboarding-skip { order: 3; width: 100%; text-align: left; } }
 @media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr; } }
 @media (max-width: 680px) { .profile-card, .settings-card { padding: 21px 19px; } .settings-form { grid-template-columns: 1fr; } .settings-full { grid-column: auto; max-width: none; } .settings-actions { align-items: flex-start; flex-direction: column; } .settings-actions > div { width: 100%; justify-content: flex-end; margin-left: 0; } .settings-security { padding: 13px; } }
+.generation-note { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--paper); color: var(--muted); font-size: .85rem; line-height: 1.5; }
+.generation-status { font-style: normal; color: var(--muted); }

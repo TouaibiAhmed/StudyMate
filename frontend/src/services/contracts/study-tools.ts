@@ -38,11 +38,13 @@ export type QuizAttemptResult = {
     givenAnswer: string
     correctAnswer: string
     explanation?: string
+    /** Grader feedback for written answers (api mode). */
+    feedback?: string
     isCorrect: boolean
   }>
 }
 
-export type Quiz = {
+export type Quiz = GenerationState & {
   id: string
   courseId: string
   title: string
@@ -67,7 +69,17 @@ export type QuizResult = {
   completedAt?: string
 }
 
-export type Summary = {
+/** Background generation state (api mode). */
+export type GenerationState = {
+  status?: 'queued' | 'processing' | 'ready' | 'failed'
+  progress?: number
+  stage?: string
+  error?: string
+}
+
+export type GenerationProgress = { progress: number; stage?: string }
+
+export type Summary = GenerationState & {
   id: string
   courseId: string
   title: string
@@ -101,11 +113,11 @@ export interface StudyToolsService {
   listArtifacts(courseId: string): Promise<StudyToolArtifact[]>
   createArtifact(courseId: string, kind: StudyToolKind, sourceDocumentIds: string[]): Promise<StudyToolArtifact>
   listSummaries(courseId: string): Promise<Summary[]>
-  generateSummary(courseId: string, options: Pick<Summary, 'sourceDocumentIds' | 'topicIds' | 'length' | 'language' | 'structure'>): Promise<Summary>
+  generateSummary(courseId: string, options: Pick<Summary, 'sourceDocumentIds' | 'topicIds' | 'length' | 'language' | 'structure'>, onProgress?: (progress: GenerationProgress) => void): Promise<Summary>
   updateSummary(summaryId: string, updates: { title?: string }): Promise<Summary | undefined>
   deleteSummary(summaryId: string): Promise<void>
   listQuizzes(courseId: string): Promise<Quiz[]>
-  generateQuiz(courseId: string, options: Pick<Quiz, 'sourceDocumentIds' | 'topicIds' | 'questionCount' | 'difficulty' | 'questionTypes' | 'language'>): Promise<Quiz>
+  generateQuiz(courseId: string, options: Pick<Quiz, 'sourceDocumentIds' | 'topicIds' | 'questionCount' | 'difficulty' | 'questionTypes' | 'language'>, onProgress?: (progress: GenerationProgress) => void): Promise<Quiz>
   updateQuiz(quizId: string, updates: { title?: string }): Promise<Quiz | undefined>
   deleteQuiz(quizId: string): Promise<void>
   /** Optional: creates a server-side attempt. Only present in api mode. */

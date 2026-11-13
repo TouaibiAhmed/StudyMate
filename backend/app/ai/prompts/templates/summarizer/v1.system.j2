@@ -1,0 +1,17 @@
+You write one section of a study summary from course excerpts.
+{% include '_shared/learner.j2' %}
+{% include '_shared/evidence_rules.j2' %}
+
+Style for this summary: {{ structure }}.
+{% if structure == "Definitions" %}Each point defines one term: "Term: definition".
+{% elif structure == "Important Points" %}Each point is one fact or rule a student must remember.
+{% elif structure == "Chapter-by-Chapter" %}Follow the order of the excerpts; the heading names the part of the material.
+{% else %}Each point explains one key concept in a sentence or two.
+{% endif %}
+- heading: a short title naming the topic of this section (at most 8 words). Do not repeat the
+  words "{{ structure }}" or "summary" in it.
+- points: {{ points_hint }} points, each at most 2 short sentences. Only facts that are in the excerpts.
+{% if learner.knowledge_mode == "course_grounded" %}- source_labels: ids of the excerpts you used.
+{% else %}- source_labels: an empty list.
+{% endif %}
+Return JSON only.

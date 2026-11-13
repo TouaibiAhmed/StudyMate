@@ -14,7 +14,7 @@ async def evidence_points(db: AsyncSession, user_id: str, concept_id: str) -> li
         .order_by(LearningEvidence.created_at)
     )).scalars().all()
     return [EvidencePoint(verdict=r.verdict, created_at=r.created_at, difficulty=r.difficulty, hints_used=r.hints_used,
-                          confidence=r.confidence, exam=r.conditions == "exam",
+                          confidence=r.confidence, conditions=r.conditions,
                           general_knowledge=r.knowledge_mode == "general_knowledge") for r in rows]
 
 

@@ -178,6 +178,22 @@ grades are capped at medium confidence. These rules came from llama3.1:8b behavi
 **Measured on the dev laptop (CPU only):** first activity ~2.5-3 min, grading ~1.5 min, next activity
 mostly ready by the time the student has read the feedback.
 
+## 7b. Summaries and quizzes (step 5)
+
+* Both are background jobs with visible progress ("Writing section 2 of 5", "Writing questions 4-6
+  of 10"). Material is cut into small groups (one per selected concept, or N contiguous parts of the
+  selected documents with up to 3 chunks each), so every model call reads ~1,000 tokens.
+* Summary: one call per section (Short 3, Medium 5, Detailed 8); a malformed section is skipped,
+  not fatal. Quiz: batches of 3 questions; every answer key is verified by code (a multiple-choice
+  answer must match exactly one of 4 distinct options, true/false must be True/False) and invalid
+  questions are replaced by extra batches. Answer keys never leave the server before submission.
+* Grading: multiple choice / true-false by exact comparison; all written answers of an attempt in
+  one model call. Quiz answers feed the learning profile at lower weight (written 0.7, choice 0.3)
+  and never count as independent successes towards "good evidence".
+* Internal excerpt ids ("E1") are scrubbed from every student-facing text (`scrub_labels`).
+* Measured on the dev laptop (CPU only): 5-question quiz ~4 min, short summary ~2.5 min,
+  grading a quiz with one written answer ~30 s.
+
 ## 8. Recommendations (step 9)
 
 Recommends **platform catalog items** (catalog courses and curated roadmaps). Never other

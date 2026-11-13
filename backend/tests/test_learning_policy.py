@@ -51,9 +51,16 @@ def test_incorrect_answers_need_practice_and_recent_evidence_counts_more():
 def test_evidence_weights():
     base = evidence_weight(point("correct"), NOW)
     assert evidence_weight(point("correct", hints_used=2), NOW) < base
-    assert evidence_weight(point("correct", exam=True), NOW) > base
+    assert evidence_weight(point("correct", conditions="exam"), NOW) > base
+    assert evidence_weight(point("correct", conditions="quiz_choice"), NOW) < evidence_weight(
+        point("correct", conditions="quiz_short"), NOW) < base
     assert evidence_weight(point("correct", general_knowledge=True), NOW) < base
     assert abs(evidence_weight(point("correct", 14), NOW) - base / 2) < 1e-9  # 14-day half-life
+
+
+def test_quiz_answers_never_make_good_evidence_alone():
+    s = concept_state([point("correct", conditions="quiz_choice") for _ in range(5)], NOW)
+    assert s.status is ConceptStatus.DEVELOPING and s.independent_successes == 0
 
 
 def test_routing_table_gives_different_activities_per_response_state():

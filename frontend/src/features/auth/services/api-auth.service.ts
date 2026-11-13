@@ -1,6 +1,6 @@
 import type { AuthService } from './auth.service'
 import type { LoginInput, SignupInput, User } from '../types/auth.types'
-import { apiClient, setApiAccessToken } from '../../../services/http-client'
+import { ApiError, apiClient, setApiAccessToken } from '../../../services/http-client'
 import type { AuthResponseDto, AuthUserDto, ProfileDto, RegisterRequestDto } from '../../../services/contracts/api/auth'
 
 function extractToken(payload: unknown): string | undefined {
@@ -125,23 +125,31 @@ export const apiAuthService: AuthService = {
   },
 
   async getCurrentUser(): Promise<User | undefined> {
-    try {
-      // In FastAPI /api/profile is authenticated. If user is signed in, profile returns.
-      const response = await apiClient.get<ProfileDto & { user?: AuthUserDto; email?: string; displayName?: string; name?: string }>('/api/profile')
-      const profile = response.data
-      if (!profile) return undefined
-
-      // If user info was nested or top-level in /api/profile
-      const userDto: AuthUserDto = profile.user || {
-        id: profile.userId || profile.user_id || 'user-current',
-        email: profile.email || '',
-        displayName: profile.displayName || profile.name || 'Student',
+    // Only a 401 means "not signed in". A server that is restarting (502/503) or a network blip
+    // must not log the student out, so those are retried a few times first.
+    for (const delay of [0, 600, 1500, 3000]) {
+      if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay))
+      try {
+        return await loadCurrentUser()
+      } catch (error) {
+        if (error instanceof ApiError && (error.code === 'unauthorized' || error.code === 'forbidden')) return undefined
       }
-
-      return mapDtoToUser(userDto, profile)
-    } catch (error) {
-      // 401 unauthenticated or not logged in
-      return undefined
     }
+    return undefined
   },
+}
+
+async function loadCurrentUser(): Promise<User | undefined> {
+  // /api/profile is authenticated: it answers only when the session cookie is valid.
+  const response = await apiClient.get<ProfileDto & { user?: AuthUserDto; email?: string; displayName?: string; name?: string }>('/api/profile')
+  const profile = response.data
+  if (!profile) return undefined
+
+  // If user info was nested or top-level in /api/profile
+  const userDto: AuthUserDto = profile.user || {
+    id: profile.userId || profile.user_id || 'user-current',
+    email: profile.email || '',
+    displayName: profile.displayName || profile.name || 'Student',
+  }
+  return mapDtoToUser(userDto, profile)
 }

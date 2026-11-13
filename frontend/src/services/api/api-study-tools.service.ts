@@ -16,6 +16,7 @@ import type {
   Quiz,
   QuizAttemptResult,
   QuizQuestion,
+  GenerationProgress,
   StudyToolArtifact,
   StudyToolKind,
   StudyToolSource,
@@ -26,19 +27,25 @@ import { ApiError, apiClient } from '../http-client'
 
 // ---------------------------------------------------------------------------
 // Polling — used when POST returns status: 'queued' or 'processing'
-// Max ~3min total (24 × up to 10s each). Re-fetches via GET /{resource}/{id}.
+// Generation runs on a local model in the background: a 10-question quiz can take
+// several minutes on a CPU-only machine, so we wait up to 30 minutes.
 // ---------------------------------------------------------------------------
 
-async function pollUntilReady<T extends { status: string; error?: string | null }>(
+const POLL_MAX_MS = 30 * 60 * 1000
+const QUIZ_SUBMIT_TIMEOUT_MS = 300_000
+
+async function pollUntilReady<T extends { status: string; error?: string | null; progress?: number; stage?: string | null }>(
   fetcher: () => Promise<T>,
-  maxAttempts = 24,
+  onProgress?: (progress: GenerationProgress) => void,
 ): Promise<T> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  const started = Date.now()
+  for (let attempt = 0; Date.now() - started < POLL_MAX_MS; attempt++) {
     if (attempt > 0) {
-      const delay = Math.min(1500 + attempt * 500, 10_000)
+      const delay = Math.min(1500 + attempt * 500, 5_000)
       await new Promise<void>((resolve) => window.setTimeout(resolve, delay))
     }
     const result = await fetcher()
+    onProgress?.({ progress: result.progress ?? 0, stage: result.stage ?? undefined })
     if (result.status === 'ready') return result
     if (result.status === 'failed' || (result.status as string) === 'error') {
       throw new ApiError({
@@ -84,6 +91,10 @@ function mapSummaryDto(dto: SummaryDto): Summary {
     courseId: dto.courseId,
     title: dto.title,
     createdAt: dto.createdAt,
+    status: dto.status,
+    progress: dto.progress,
+    stage: dto.stage ?? undefined,
+    error: dto.error ?? undefined,
     sourceDocumentIds: dto.sourceDocumentIds ?? [],
     topicIds: dto.topicIds ?? [],
     sourceLabel: buildSourceLabel(sources, dto.topicIds?.length ?? 0),
@@ -115,6 +126,10 @@ function mapQuizDto(dto: QuizDto): Quiz {
     courseId: dto.courseId,
     title: dto.title,
     createdAt: dto.createdAt,
+    status: dto.status === 'draft' || dto.status === 'archived' ? undefined : dto.status,
+    progress: dto.progress,
+    stage: dto.stage ?? undefined,
+    error: dto.error ?? undefined,
     sourceDocumentIds: dto.sourceDocumentIds ?? [],
     topicIds: dto.topicIds ?? [],
     sourceLabel: buildSourceLabel(sources, dto.topicIds?.length ?? 0),
@@ -172,6 +187,7 @@ function mapQuizResult(dto: QuizResultDto): QuizAttemptResult {
       givenAnswer: a.answer ?? '',
       correctAnswer: a.correctAnswer ?? '',
       explanation: a.explanation ?? undefined,
+      feedback: a.feedback ?? undefined,
       isCorrect: a.isCorrect,
     })),
   }
@@ -277,6 +293,7 @@ export const apiStudyToolsService: StudyToolsService = {
   async generateSummary(
     courseId: string,
     options: Pick<Summary, 'sourceDocumentIds' | 'topicIds' | 'length' | 'language' | 'structure'>,
+    onProgress?: (progress: GenerationProgress) => void,
   ): Promise<Summary> {
     const body: GenerateSummaryRequestDto = {
       sourceDocumentIds: options.sourceDocumentIds,
@@ -294,7 +311,7 @@ export const apiStudyToolsService: StudyToolsService = {
     const ready = await pollUntilReady(async () => {
       const r = await apiClient.get<SummaryDto>(`/api/summaries/${created.id}`)
       return r.data
-    })
+    }, onProgress)
     return mapSummaryDto(ready)
   },
 
@@ -322,6 +339,7 @@ export const apiStudyToolsService: StudyToolsService = {
   async generateQuiz(
     courseId: string,
     options: Pick<Quiz, 'sourceDocumentIds' | 'topicIds' | 'questionCount' | 'difficulty' | 'questionTypes' | 'language'>,
+    onProgress?: (progress: GenerationProgress) => void,
   ): Promise<Quiz> {
     const body: GenerateQuizRequestDto = {
       sourceDocumentIds: options.sourceDocumentIds,
@@ -340,7 +358,7 @@ export const apiStudyToolsService: StudyToolsService = {
     const ready = await pollUntilReady(async () => {
       const r = await apiClient.get<QuizDto>(`/api/quizzes/${created.id}`)
       return r.data
-    })
+    }, onProgress)
     return mapQuizDto(ready)
   },
 
@@ -369,7 +387,8 @@ export const apiStudyToolsService: StudyToolsService = {
     // POST /api/quiz-attempts/{id}/submit
     // answers: Record<questionId, givenAnswer> — grading happens on the server
     const body = { answers: Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer })) }
-    const response = await apiClient.post<QuizResultDto>(`/api/quiz-attempts/${attemptId}/submit`, body)
+    // Written answers are graded by the local model: allow several minutes.
+    const response = await apiClient.post<QuizResultDto>(`/api/quiz-attempts/${attemptId}/submit`, body, { timeoutMs: QUIZ_SUBMIT_TIMEOUT_MS })
     return mapQuizResult(response.data)
   },
 }

@@ -1,0 +1,8 @@
+{% if focus %}Focus: {{ focus }}
+{% endif %}
+{% if avoid %}Questions already written (do not repeat):
+{% for q in avoid %}- {{ q }}
+{% endfor %}{% endif %}
+
+Course excerpts:
+{% include '_shared/excerpts.j2' %}

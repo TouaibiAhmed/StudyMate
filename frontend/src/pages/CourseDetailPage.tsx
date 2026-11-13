@@ -381,7 +381,7 @@ function SavedSummaryGroup({ summaries }: { summaries: Summary[] }) {
         <Link className="saved-tool-card" key={summary.id} to={`/courses/${summary.courseId}/summaries/${summary.id}`}>
           <strong>{summary.title}</strong>
           <span>{formatToolDate(summary.createdAt)} · {summary.sourceLabel}</span>
-          <small>{summary.length} · {summary.language} · {summary.structure}</small>
+          <small>{summary.length} · {summary.language} · {summary.structure}{summary.status && summary.status !== 'ready' ? (summary.status === 'failed' ? ' · Failed' : ' · Generating…') : ''}</small>
         </Link>
       )) : (
         <div className="study-tools-empty"><span>No summaries yet.</span><small>Choose the tool above to generate one.</small></div>
@@ -403,9 +403,9 @@ function SavedQuizGroup({ quizzes, onDelete, onRename }: { quizzes: Quiz[]; onDe
           <Link to={`/courses/${quiz.courseId}/quizzes/${quiz.id}`}>
             <strong>{quiz.title}</strong>
             <span>{formatToolDate(quiz.createdAt)} · {quiz.sourceLabel}</span>
-            <small>{quiz.questionCount} questions · {quiz.difficulty} · {quiz.language}</small>
+            <small>{quiz.questionCount} questions · {quiz.difficulty} · {quiz.language}{quiz.status && quiz.status !== 'ready' ? (quiz.status === 'failed' ? ' · Failed' : ' · Generating…') : ''}</small>
           </Link>
-          <Link className="saved-tool-retake" to={`/courses/${quiz.courseId}/quizzes/${quiz.id}/play`}>Retake quiz</Link>
+          {(!quiz.status || quiz.status === 'ready') && <Link className="saved-tool-retake" to={`/courses/${quiz.courseId}/quizzes/${quiz.id}/play`}>Retake quiz</Link>}
           {editing === quiz.id ? (
             <div className="saved-tool-edit">
               <input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Quiz title" />
