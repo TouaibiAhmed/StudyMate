@@ -109,7 +109,7 @@ export function AppShell() {
       <main className="main-content">
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="primary-navigation"><Menu size={21} /></button>
-          <div className="page-context"><span className="eyebrow">Good morning, {user?.name.split(' ')[0] ?? 'there'} · {profile?.level ?? 'Student'}</span><h1>{current}</h1></div>
+          <div className="page-context"><span className="eyebrow">Good {partOfDay()}, {user?.name.split(' ')[0] ?? 'there'} · {profile?.level ?? 'Student'}</span><h1>{current}</h1></div>
           <div className="topbar-actions">
             <form className="topbar-search" onSubmit={handleSearchSubmit}><Search size={16} /><input name="query" aria-label="Search courses" placeholder="Search courses" /></form>
             <button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button>
@@ -135,4 +135,10 @@ function AccountMenu({ id, user, profile, onClose, onLogout }: { id: string; use
     <button role="menuitem" onClick={onLogout}>Sign out</button>
     <button role="menuitem" onClick={onClose}><X size={15} /> Close menu</button>
   </div>
+}
+
+/** Same rule as the dashboard API (local time): morning 5-12, afternoon 12-18, evening otherwise. */
+function partOfDay() {
+  const hour = new Date().getHours()
+  return hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 18 ? 'afternoon' : 'evening'
 }

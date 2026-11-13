@@ -18,6 +18,7 @@ import importlib
 # Built in order (see docs/ARCHITECTURE.md, "Build order").
 FEATURES: list[str] = [
     "auth", "profile", "courses", "documents", "chat", "study", "progress", "study_tools", "exams", "roadmaps",
+    "dashboard",
 ]
 
 _SUBMODULES = ("models", "jobs")

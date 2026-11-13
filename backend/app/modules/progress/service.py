@@ -4,7 +4,6 @@ weekly activity. Everything is derived from stored attempts/evaluations (FR-08, 
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Literal
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -131,28 +130,18 @@ async def session_history(db: AsyncSession, user_id: str, *, since: datetime | N
 
 
 async def weekly_activity(db: AsyncSession, user_id: str, tz: str) -> list[WeeklyActivityOut]:
-    """Last 7 days in the student's time zone. Minutes are estimated from answer timestamps
-    (first to last answer of a session that day, plus time to read the first question)."""
-    zone = ZoneInfo(tz)
-    today = utcnow().astimezone(zone).date()
-    start_day = today - timedelta(days=6)
-    rows = (await db.execute(
-        select(Activity.session_id, Attempt.created_at)
-        .join(Attempt, Attempt.activity_id == Activity.id)
-        .where(Attempt.user_id == user_id, Attempt.created_at >= utcnow() - timedelta(days=8))
-    )).all()
-    by_day: dict = defaultdict(lambda: defaultdict(list))
-    for sid, at in rows:
-        local = at.astimezone(zone)
-        if local.date() >= start_day:
-            by_day[local.date()][sid].append(local)
+    """Last 7 days in the student's time zone, from the shared activity timeline (study answers,
+    quizzes, exams and chat), so the dashboard and this page always agree."""
+    from app.modules.dashboard.activity import daily_activity, today_in  # local import: dashboard is later
+
+    today = today_in(tz)
+    stats = await daily_activity(db, user_id, tz, days=8)
     out = []
     for i in range(7):
-        day = start_day + timedelta(days=i)
-        sessions = by_day.get(day, {})
-        minutes = sum(min(120, int((max(t) - min(t)).total_seconds() // 60) + 2) for t in sessions.values())
-        out.append(WeeklyActivityOut(day=day.strftime("%a"), date=day.isoformat(), sessions=len(sessions),
-                                     questions=sum(len(t) for t in sessions.values()), minutes=minutes))
+        day = today - timedelta(days=6 - i)
+        s = stats.get(day)
+        out.append(WeeklyActivityOut(day=day.strftime("%a"), date=day.isoformat(), sessions=s.sessions if s else 0,
+                                     questions=s.questions if s else 0, minutes=s.minutes if s else 0))
     return out
 
 

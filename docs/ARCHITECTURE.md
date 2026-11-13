@@ -241,6 +241,27 @@ mostly ready by the time the student has read the feedback.
 * Following (`PUT/DELETE /api/roadmaps/{id}/follow`, automatic on any interaction) is the interest
   signal step 9 uses.
 
+## 7e. Dashboard, daily activity and streaks (step 8)
+
+* `GET /api/dashboard` is one read model. Nothing is a stored counter: every number is recomputed
+  from study answers, quiz/exam attempts and chat questions, in the student's time zone
+  (`dashboard/activity.py`).
+* **Study time** = union of intervals (overlaps count once): a study answer covers the time since
+  the previous answer of its session (or the session start) when ≤ 15 min, else 2 min; a quiz covers
+  start → submit (max 60 min); an exam start → submit; a chat question 1 min. Intervals crossing local
+  midnight are split. The progress page's weekly chart uses the same timeline, so both pages agree.
+* **Active day** = at least one study answer, submitted quiz/exam or chat question (minutes alone,
+  e.g. an exam started the evening before, do not make a day active). **Streak** = consecutive
+  active days ending today, or ending yesterday until today is over ("study today to keep it").
+  Longest streak is reported too; `showStreaks` (settings) hides it in the UI.
+* **Weekly goal** = distinct study sessions with an answer since Monday 00:00 local, against the
+  `weeklyGoal` setting (sessions per week).
+* **Next best step**, by fixed rules in order: resume an unfinished session (≤ 3 days old) → practise
+  the weakest concept (needs practice, then developing) → no course: next roadmap topic or upload →
+  wait for material → start an unstudied concept → practice exam. No model call; the reason is shown.
+* Also: continue learning (latest session), courses by recent study, concepts to practise, recent
+  sessions, the most recently followed roadmap with its next core topic, and an exam suggestion.
+
 ## 8. Recommendations (step 9)
 
 Recommends **platform catalog items** (catalog courses and curated roadmaps). Never other

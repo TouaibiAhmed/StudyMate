@@ -1318,3 +1318,10 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; }
 .roadmap-generation-panel { display: grid; gap: 12px; }
 .roadmap-generation-panel h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.05rem; }
 .roadmap-detail-hero .roadmap-delete { margin-left: auto; align-self: flex-start; }
+
+/* Dashboard: live data */
+.recommendation-detail { display: block; margin-top: 2px; color: var(--muted); font-size: .84rem; font-weight: 400; }
+.lead-note-hint { display: block; margin-top: 6px; color: var(--muted); font-size: .72rem; }
+.week-day.today small { color: var(--ink, inherit); font-weight: 700; }
+.week-day.future { opacity: .45; }
+.week-goal { display: grid; gap: 6px; margin-top: 14px; color: var(--muted); font-size: .85rem; }

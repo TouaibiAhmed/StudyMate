@@ -1,252 +1,139 @@
-import type { DashboardActivityDto, DashboardActivityListDto, DashboardCourseDto, DashboardDto } from '../contracts/api/dashboard'
-import type { ConceptProgressDto, StudyHistoryItemDto } from '../contracts/api/progress'
-import type { DashboardData, DashboardService } from '../contracts/dashboard'
-import type { DashboardCourse, PracticeConcept, Roadmap, StudySession, WeeklyActivity } from '../../types'
+import type { DashboardContinue, DashboardData, DashboardNextStep, DashboardService, DashboardStreak } from '../contracts/dashboard'
+import type { DashboardCourse, PracticeConcept, StudySession, WeeklyActivity } from '../../types'
 import { apiClient } from '../http-client'
 
-// ---------------------------------------------------------------------------
-// Timezone-aware date formatting
-// ---------------------------------------------------------------------------
+// Backend: GET /api/dashboard. Every number comes from stored data (study answers, quizzes, exams,
+// chat), computed in the student's time zone.
 
-const userTz = (): string => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone
-  } catch {
-    return 'UTC'
-  }
+type CourseDto = { courseId: string; title: string; subject: string; progress: number; conceptCount: number; lastActivityAt: string | null }
+type PracticeDto = { conceptId: string; courseId: string; course: string; name: string; status: string; reason: string }
+type HistoryDto = { id: string; sessionId: string; courseId: string | null; course: string | null; title: string; durationSeconds: number; outcome: string; completed: boolean; date: string }
+type DayDto = { day: string; date: string; minutes: number; sessions: number; questions: number; active: boolean; isToday: boolean; isFuture: boolean }
+type RoadmapDto = { id: string; title: string; progress: number; completedTopics: number; totalTopics: number; nextTopic: string | null }
+
+type DashboardDto = {
+  greetingName: string
+  focus: string | null
+  today: string
+  partOfDay: 'morning' | 'afternoon' | 'evening'
+  isFirstTime: boolean
+  nextStep: DashboardNextStep
+  continueLearning: DashboardContinue | null
+  courses: CourseDto[]
+  conceptsToPractice: PracticeDto[]
+  recentSessions: HistoryDto[]
+  week: DayDto[]
+  weekMinutes: number
+  streak: DashboardStreak
+  weekGoal: { target: number; done: number }
+  roadmap: RoadmapDto | null
+  examSuggestion: { courseId: string; title: string; conceptCount: number } | null
 }
 
-function relativeDate(iso: string | null | undefined): string {
-  if (!iso) return ''
-  try {
-    const tz = userTz()
-    const date = new Date(iso)
-    const nowMs = Date.now()
-    const diffMs = nowMs - date.getTime()
-    const diffDays = Math.floor(diffMs / 86_400_000)
+const COLORS = ['purple', 'green', 'orange', 'blue'] as const
 
-    const timeStr = date.toLocaleTimeString(undefined, { timeZone: tz, hour: 'numeric', minute: '2-digit' })
-
-    if (diffDays === 0) return `Today, ${timeStr}`
-    if (diffDays === 1) return `Yesterday, ${timeStr}`
-    if (diffDays < 7) {
-      const dayName = date.toLocaleDateString(undefined, { timeZone: tz, weekday: 'long' })
-      return `${dayName}, ${timeStr}`
-    }
-    return date.toLocaleDateString(undefined, { timeZone: tz, dateStyle: 'medium' })
-  } catch {
-    return iso
-  }
+function colorFor(subject: string, index: number): string {
+  const s = subject.toLowerCase()
+  if (/deep|neural|learning|\bai\b/.test(s)) return 'purple'
+  if (/stat|math|data|bio/.test(s)) return 'green'
+  if (/business|econ|chem|phys|account|financ/.test(s)) return 'orange'
+  return COLORS[index % COLORS.length]
 }
 
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds} sec`
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes} min`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m ? `${h}h ${m}m` : `${h}h`
-}
-
-// ---------------------------------------------------------------------------
-// Color / icon helpers (mirror api-course.service.ts logic)
-// ---------------------------------------------------------------------------
-
-const COURSE_COLORS = ['purple', 'green', 'orange', 'blue'] as const
-type CourseColor = typeof COURSE_COLORS[number]
-
-function deriveColor(subject: string, index: number): CourseColor {
-  const s = (subject ?? '').toLowerCase()
-  if (s.includes('deep') || s.includes('neural') || s.includes('learning') || s.includes('ai')) return 'purple'
-  if (s.includes('stat') || s.includes('math') || s.includes('data') || s.includes('bio')) return 'green'
-  if (s.includes('business') || s.includes('econ') || s.includes('chem') || s.includes('phys')) return 'orange'
-  return COURSE_COLORS[index % COURSE_COLORS.length]
-}
-
-function deriveIcon(subject: string): string {
-  const s = (subject ?? '').toLowerCase()
-  if (s.includes('deep') || s.includes('neural') || s.includes('learning')) return '∿'
-  if (s.includes('stat') || s.includes('math')) return 'σ'
-  if (s.includes('bio')) return '✣'
-  if (s.includes('business')) return '↗'
+function iconFor(subject: string): string {
+  const s = subject.toLowerCase()
+  if (/deep|neural|learning/.test(s)) return '∿'
+  if (/stat|math/.test(s)) return 'σ'
+  if (/bio/.test(s)) return '✣'
+  if (/business|econ|account|financ/.test(s)) return '↗'
   return '＋'
 }
 
-// ---------------------------------------------------------------------------
-// DTO mappers
-// ---------------------------------------------------------------------------
+export function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  const now = new Date()
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000)
+  const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  if (days === 0) return `Today, ${time}`
+  if (days === 1) return `Yesterday, ${time}`
+  if (days < 7) return `${date.toLocaleDateString(undefined, { weekday: 'long' })}, ${time}`
+  return date.toLocaleDateString(undefined, { dateStyle: 'medium' })
+}
 
-function mapCourseDto(dto: DashboardCourseDto, index: number): DashboardCourse {
-  const subject = dto.category ?? dto.subject ?? dto.title
-  const color = (dto.color as CourseColor | null) ?? deriveColor(subject, index)
-  const icon = dto.icon ?? deriveIcon(subject)
-  const totalLessons = dto.lessonCount ?? dto.totalLessons ?? 10
-  const completed = dto.completedLessons ?? Math.round((dto.progress / 100) * totalLessons)
+function duration(seconds: number): string {
+  if (seconds < 60) return seconds ? '<1 min' : '—'
+  const minutes = Math.round(seconds / 60)
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`.replace(' 0m', '')
+}
 
-  const lastActivity = dto.lastActivityText ?? (dto.lastActivityAt ? `Last studied · ${relativeDate(dto.lastActivityAt)}` : 'Not started')
-  const nextLesson = dto.nextLessonTitle ?? dto.nextLesson ?? 'Continue course'
+export function minutesLabel(minutes: number): string {
+  if (!minutes) return ''
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`.replace(' 0m', '')
+}
 
+function toCourse(dto: CourseDto, index: number): DashboardCourse {
   return {
     id: dto.courseId,
     title: dto.title,
-    category: subject,
+    category: dto.subject,
     progress: dto.progress,
-    lessons: totalLessons,
-    completed,
-    color,
-    icon,
-    lastActivity,
-    nextLesson,
+    lessons: dto.conceptCount,
+    completed: 0,
+    color: colorFor(dto.subject, index),
+    icon: iconFor(dto.subject),
+    lastActivity: dto.lastActivityAt ? `Last studied ${relativeTime(dto.lastActivityAt).replace(/^(Today|Yesterday)/, (w) => w.toLowerCase())}` : 'Not studied yet',
+    nextLesson: '',
   }
 }
 
-function mapConceptDto(dto: ConceptProgressDto, index: number): PracticeConcept {
-  const CONCEPT_COLORS: CourseColor[] = ['purple', 'green', 'orange', 'purple', 'green']
-  const conceptId = dto.id ?? dto.conceptId ?? dto.concept_id ?? `concept-${index}`
-  const title = dto.title ?? dto.name ?? 'Concept'
-  const reason = dto.reason ?? dto.recommendedAction ?? dto.recommended_action ?? 'Review this concept with a practice question.'
-  const course = ''
-  const color = CONCEPT_COLORS[index % CONCEPT_COLORS.length]
-  return { id: conceptId, title, reason, course, color }
+function toConcept(dto: PracticeDto, index: number): PracticeConcept & { courseId: string; status: string } {
+  return { id: dto.conceptId, title: dto.name, reason: dto.reason, course: dto.course, color: COLORS[index % 3], courseId: dto.courseId, status: dto.status }
 }
 
-function mapSessionDto(dto: StudyHistoryItemDto): StudySession {
-  const id = dto.sessionId ?? dto.session_id ?? dto.id
-  const course = dto.course ?? ''
-  const duration = dto.durationSeconds
-    ? formatDuration(dto.durationSeconds)
-    : (dto.duration ?? '30 min')
-  const completedAt = dto.date ?? (dto.completedAt ? relativeDate(dto.completedAt) : 'Recent')
-  const score = dto.outcome?.match(/\d+%/)?.[0] ?? undefined
-  return { id, title: dto.title, course, duration, completedAt, score }
-}
-
-// ---------------------------------------------------------------------------
-// Weekly activity aggregation from per-event feed
-// ---------------------------------------------------------------------------
-
-const DAY_ABBREVS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
-
-function aggregateActivityToWeekly(events: DashboardActivityDto[]): WeeklyActivity[] {
-  const tz = userTz()
-  const minutesByDay = new Array<number>(7).fill(0)
-  const now = new Date()
-  const weekStart = new Date(now)
-  weekStart.setDate(now.getDate() - now.getDay()) // Sunday
-  weekStart.setHours(0, 0, 0, 0)
-
-  for (const event of events) {
-    try {
-      const date = new Date(event.occurredAt)
-      if (date < weekStart) continue
-      const dayIndex = new Date(date.toLocaleString('en-US', { timeZone: tz })).getDay()
-      const mins = event.durationMinutes ?? (event.durationSeconds != null ? Math.round(event.durationSeconds / 60) : 20)
-      minutesByDay[dayIndex] += mins
-    } catch {
-      // Skip malformed timestamps
-    }
+function toSession(dto: HistoryDto): StudySession {
+  const correct = dto.outcome.match(/(\d+) answers? · (\d+) correct/)
+  return {
+    id: dto.sessionId,
+    title: dto.title,
+    course: dto.course ?? 'General knowledge',
+    duration: duration(dto.durationSeconds),
+    completedAt: relativeTime(dto.date),
+    score: correct && Number(correct[1]) > 0 ? `${correct[2]}/${correct[1]}` : undefined,
   }
-
-  return DAY_ABBREVS.map((day, i) => {
-    const minutes = minutesByDay[i]
-    const label = minutes === 0 ? 'Rest' : minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`.replace(' 0m', '')
-    return { day, minutes, label }
-  })
 }
 
-function normalizeWeeklyActivity(raw: Array<{ day: string; minutes: number }>): WeeklyActivity[] {
-  return raw.map(({ day, minutes }) => {
-    const label = minutes === 0 ? 'Rest' : minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`.replace(' 0m', '')
-    return { day, minutes, label }
-  })
+function toDay(dto: DayDto): WeeklyActivity & { isToday: boolean; isFuture: boolean; active: boolean } {
+  return { day: dto.day, minutes: dto.minutes, label: dto.isFuture ? '' : dto.minutes ? minutesLabel(dto.minutes) : dto.active ? '<1m' : 'Rest', isToday: dto.isToday, isFuture: dto.isFuture, active: dto.active }
 }
 
-// ---------------------------------------------------------------------------
-// Cache invalidation signal — call after any learning action so the next
-// getDashboard() call fetches fresh data (components that watch dashboardVersion
-// can re-request; existing DashboardOverview re-fetches on each mount naturally)
-// ---------------------------------------------------------------------------
-
+// Kept for callers that refresh the dashboard after a learning action.
 let dashboardVersion = 0
-
-export function invalidateDashboard(): void {
-  dashboardVersion++
-}
-
-export function getDashboardVersion(): number {
-  return dashboardVersion
-}
-
-// ---------------------------------------------------------------------------
-// Service implementation
-// ---------------------------------------------------------------------------
+export function invalidateDashboard(): void { dashboardVersion++ }
+export function getDashboardVersion(): number { return dashboardVersion }
 
 export const apiDashboardService: DashboardService = {
   async getDashboard(): Promise<DashboardData> {
-    // Fetch dashboard and activity in parallel; activity failure is non-fatal
-    const [dashResponse, activityResponse] = await Promise.allSettled([
-      apiClient.get<DashboardDto>('/api/dashboard'),
-      apiClient.get<DashboardActivityListDto>('/api/dashboard/activity'),
-    ])
-
-    if (dashResponse.status === 'rejected') throw dashResponse.reason
-
-    const dto = dashResponse.value.data
-    const rawActivity = activityResponse.status === 'fulfilled'
-      ? Array.isArray(activityResponse.value.data)
-        ? activityResponse.value.data
-        : 'items' in activityResponse.value.data
-          ? activityResponse.value.data.items
-          : []
-      : (dto.activity ?? [])
-
-    // Greeting
-    const greetingName = dto.greetingName || 'there'
-    const greetingFocus = dto.greetingFocus ?? ''
-    const greetingRecommendation = dto.greetingRecommendation ?? dto.recommendation ?? ''
-
-    // Courses
-    const courses: DashboardCourse[] = (dto.courses ?? []).map((c, i) => mapCourseDto(c, i))
-
-    // Concepts to practice
-    const concepts: PracticeConcept[] = (dto.conceptsToPractice ?? []).map((c, i) => mapConceptDto(c, i))
-
-    // Recent sessions
-    const sessions: StudySession[] = (dto.recentSessions ?? []).map(mapSessionDto)
-
-    // Weekly activity — prefer explicit aggregated data from API, fall back to computing from events
-    let weeklyActivity: WeeklyActivity[]
-    const rawWeekly = dto.weeklyActivity ?? dto.weekly_activity
-    if (rawWeekly?.length) {
-      weeklyActivity = normalizeWeeklyActivity(rawWeekly)
-    } else if (rawActivity.length) {
-      weeklyActivity = aggregateActivityToWeekly(rawActivity)
-    } else {
-      weeklyActivity = DAY_ABBREVS.map((day) => ({ day, minutes: 0, label: 'Rest' }))
-    }
-
-    // Roadmap
-    const roadmap: Roadmap = dto.roadmap
-      ? {
-          title: dto.roadmap.title,
-          description: dto.roadmap.description ?? '',
-          progress: dto.roadmap.progress,
-          modules: dto.roadmap.modules ?? dto.roadmap.moduleCount ?? 8,
-          color: dto.roadmap.color ?? 'purple',
-        }
-      : { title: 'Learning Path', description: '', progress: 0, modules: 0, color: 'purple' }
-
-    // isFirstTime: true if no courses AND no sessions AND no concepts
-    const isFirstTime = dto.isFirstTime ?? (courses.length === 0 && sessions.length === 0 && concepts.length === 0)
-
+    const dto = (await apiClient.get<DashboardDto>('/api/dashboard')).data
     return {
-      greeting: { name: greetingName, focus: greetingFocus, recommendation: greetingRecommendation },
-      courses,
-      concepts,
-      sessions,
-      weeklyActivity,
-      roadmap,
-      isFirstTime,
+      greeting: { name: dto.greetingName, focus: dto.focus ?? '', recommendation: dto.nextStep.title },
+      courses: dto.courses.map(toCourse),
+      concepts: dto.conceptsToPractice.map(toConcept),
+      sessions: dto.recentSessions.map(toSession),
+      weeklyActivity: dto.week.map(toDay),
+      roadmap: dto.roadmap
+        ? { ...dto.roadmap, description: '', modules: dto.roadmap.totalTopics, color: 'purple' }
+        : null,
+      isFirstTime: dto.isFirstTime,
+      today: dto.today,
+      partOfDay: dto.partOfDay,
+      nextStep: dto.nextStep,
+      continueLearning: dto.continueLearning,
+      streak: dto.streak,
+      weekGoal: dto.weekGoal,
+      weekMinutes: dto.weekMinutes,
+      examSuggestion: dto.examSuggestion,
     }
   },
 }
