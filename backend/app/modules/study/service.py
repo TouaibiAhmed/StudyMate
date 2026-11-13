@@ -138,6 +138,12 @@ async def _queue_activity(db: AsyncSession, s: StudySession, sequence: int) -> N
                   subject=f"session:{s.id}", priority=0)
 
 
+async def _no_active_exam(db: AsyncSession, user_id: str, course_id: str | None) -> None:
+    from app.modules.exams.service import ensure_no_active_exam  # local: exams import study modules
+
+    await ensure_no_active_exam(db, user_id, course_id)
+
+
 # --- start -----------------------------------------------------------------------------------------
 
 async def _suggest_concept(db: AsyncSession, user_id: str, course_id: str) -> Concept | None:
@@ -156,6 +162,7 @@ async def _suggest_concept(db: AsyncSession, user_id: str, course_id: str) -> Co
 
 async def start_session(db: AsyncSession, user: User, data: SessionCreate) -> SessionOut:
     course = await get_owned_course(db, user.id, data.course_id) if data.course_id else None
+    await _no_active_exam(db, user.id, course.id if course else None)
     concept: Concept | None = None
     if data.concept_id:
         concept = await db.get(Concept, data.concept_id)
@@ -216,6 +223,15 @@ def _norm(text: str) -> str:
     return re.sub(r"[^\w ]", "", text.lower()).strip()
 
 
+_STOP = {"that", "this", "with", "from", "when", "than", "into", "what", "which", "their", "there", "about",
+         "does", "have", "more", "model", "models", "answer"}
+
+
+def _terms(text: str) -> set[str]:
+    """Rough key-word stems (first 5 letters of words of 4+ letters) for topical overlap checks."""
+    return {w[:5] for w in re.findall(r"[a-z]{4,}", text.lower()) if w not in _STOP}
+
+
 def _consistent(ev: AnswerEvaluation, general_knowledge: bool, rubric: dict | None = None) -> AnswerEvaluation:
     """Deterministic sanity rules on top of the model's judgement (doc 8.5).
 
@@ -232,13 +248,20 @@ def _consistent(ev: AnswerEvaluation, general_knowledge: bool, rubric: dict | No
         clean = _LABEL_PREFIX.sub("", _LABEL_SUFFIX.sub("", gap)).strip()
         if clean and _norm(clean) not in alternatives and _norm(clean) not in covered and clean not in gaps:
             gaps.append(clean)
+    # A rubric-based grade only asks for the rubric's ideas: drop "gaps" about something else
+    # (seen with llama3.1:8b: "bias-variance trade-off" listed for a question that never asked for it).
+    rubric_terms = _terms(" ".join((rubric.get("required_ideas") or []) + (rubric.get("common_gaps") or [])))
+    off_rubric = [g for g in gaps if rubric_terms and not (_terms(g) & rubric_terms)]
+    gaps = [g for g in gaps if g not in off_rubric]
     # What the answer got right: the model's strengths, or else the rubric ideas it judged covered.
     strengths = list(ev.strengths) or [f"You explained: {idea}" for idea in ev.covered_ideas]
 
     verdict, confidence = ev.verdict, ev.confidence
     required = [_norm(r) for r in rubric.get("required_ideas") or []]
     all_covered = bool(required) and len(ev.covered_ideas) >= len(required) and not ev.misconception
-    if all_covered and verdict in ("partially_correct", "incorrect"):
+    only_off_rubric = bool(off_rubric) and not gaps and not ev.misconception
+    if (all_covered or only_off_rubric) and verdict in ("partially_correct", "incorrect") and (
+            all_covered or verdict == "partially_correct"):
         # The model's idea-by-idea judgement is more reliable than its overall impression: an answer
         # that contains every required idea and no wrong statement is correct. Remaining "gaps" are
         # then style remarks ("could be explained more clearly"), not missing ideas.
@@ -268,6 +291,7 @@ async def submit_attempt(db: AsyncSession, user: User, activity_id: str, data: A
     if activity is None or s is None or s.user_id != user.id:
         raise NotFoundError("Activity not found.")
     SESSION_FLOW.require(SessionState(s.status), [SessionState.ACTIVE], "answer a question")
+    await _no_active_exam(db, user.id, s.course_id)
     if s.model_calls >= get_settings().session_max_model_calls:
         raise BudgetExceeded()
 

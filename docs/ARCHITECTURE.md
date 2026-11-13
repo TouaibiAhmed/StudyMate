@@ -194,6 +194,27 @@ mostly ready by the time the student has read the feedback.
 * Measured on the dev laptop (CPU only): 5-question quiz ~4 min, short summary ~2.5 min,
   grading a quiz with one written answer ~30 s.
 
+## 7c. Timed practice exams (step 6)
+
+* `POST /api/exams` returns at once (`preparing`); the worker writes the questions (multiple choice +
+  written answers with rubrics, mix by domain type). The attempt and its timer start only with
+  `POST /api/exams/{id}/start`, so model latency never consumes exam time (doc 14.2).
+* The deadline is stored on the attempt and is authoritative. Answers are autosaved with `PUT` until
+  the deadline (+5 s network grace) and refused after it; expired attempts are auto-submitted on
+  access and by the worker's `exams.sweep_expired` task (every 30 s). Starting again during a running
+  attempt resumes it with the same deadline (refresh / second tab).
+* Integrity in code: while an attempt runs, chat messages and study sessions for that course are
+  refused with 409 (`ensure_no_active_exam`).
+* Grading runs after submission in the worker: multiple choice by exact match, written answers by the
+  assessment role with the shared consistency rules; unanswered questions are "insufficient evidence"
+  and create no learning evidence. Answered questions create `exam` evidence (weight 1.5).
+* Analysis: per question (answer, expected ideas, strengths, gaps, confidence), per concept (correct /
+  total, missed ideas, next action from the learning policy), verdict counts and a "practice signal"
+  score that is never presented as a prediction.
+* Grading rule added from real runs: gaps that share no key word with the rubric are dropped, and a
+  partially-correct verdict with only off-rubric gaps becomes correct.
+* Measured on the dev laptop (CPU only): 5 questions written in ~3.5 min, graded in ~2.5 min.
+
 ## 8. Recommendations (step 9)
 
 Recommends **platform catalog items** (catalog courses and curated roadmaps). Never other

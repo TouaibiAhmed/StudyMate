@@ -16,7 +16,7 @@ Add a feature by appending its package name to FEATURES.
 import importlib
 
 # Built in order (see docs/ARCHITECTURE.md, "Build order").
-FEATURES: list[str] = ["auth", "profile", "courses", "documents", "chat", "study", "progress", "study_tools"]
+FEATURES: list[str] = ["auth", "profile", "courses", "documents", "chat", "study", "progress", "study_tools", "exams"]
 
 _SUBMODULES = ("models", "jobs")
 

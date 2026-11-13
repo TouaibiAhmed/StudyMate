@@ -6,6 +6,8 @@ export type ExamQuestionDto = {
   id: ApiId
   examId: ApiId
   conceptId?: ApiId | null
+  /** Concept name (api mode) */
+  concept?: string | null
   prompt: string
   type: ExamQuestionType
   options?: string[] | null

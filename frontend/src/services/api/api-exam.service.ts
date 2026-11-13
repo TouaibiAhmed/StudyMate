@@ -11,6 +11,7 @@ import type {
   ExamAttempt,
   ExamConceptResult,
   ExamCourseOption,
+  ExamProgress,
   ExamQuestion,
   ExamQuestionResult,
   ExamResult,
@@ -20,6 +21,9 @@ import type {
 } from '../contracts/exams'
 import { ApiError } from '../http-client'
 import { apiClient } from '../http-client'
+
+type ExamGenerationState = { status?: string; progress?: number; stage?: string | null; error?: string | null }
+type GradingState = { status?: 'grading' | 'graded' | 'failed'; progress?: number }
 
 // ---------------------------------------------------------------------------
 // Mapping helpers
@@ -51,7 +55,7 @@ function mapExamDto(dto: ExamDto): Omit<PracticeExam, 'attemptId' | 'deadlineAt'
     prompt: q.prompt,
     type: mapQuestionType(q.type),
     options: q.options ?? undefined,
-    concept: q.conceptId ?? '',
+    concept: q.concept ?? '',
   }))
   return {
     id: dto.id,
@@ -96,10 +100,6 @@ function mapAttemptSummaryToAttempt(dto: ExamAttemptSummaryDto): ExamAttempt {
     score: dto.score ?? undefined,
     completed: dto.status === 'submitted',
   }
-}
-
-function mapAttemptDtoToAttempt(dto: ExamAttemptDto): ExamAttempt {
-  return mapAttemptSummaryToAttempt(dto as ExamAttemptSummaryDto)
 }
 
 function mapAnalysisToResult(dto: ExamAnalysisDto): ExamResult {
@@ -153,6 +153,32 @@ function mapAnalysisToResult(dto: ExamAnalysisDto): ExamResult {
 }
 
 // ---------------------------------------------------------------------------
+// Background work: questions are written before the clock starts, and answers are
+// graded after submission. Both run on a local model and can take minutes.
+// ---------------------------------------------------------------------------
+
+const WAIT_MAX_MS = 30 * 60 * 1000
+
+async function waitFor<T>(
+  fetch: () => Promise<T>,
+  done: (value: T) => boolean,
+  failed: (value: T) => string | undefined,
+  progress: (value: T) => ExamProgress,
+  onProgress?: (progress: ExamProgress) => void,
+): Promise<T> {
+  const started = Date.now()
+  for (let attempt = 0; Date.now() - started < WAIT_MAX_MS; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, Math.min(1500 + attempt * 500, 5000)))
+    const value = await fetch()
+    onProgress?.(progress(value))
+    const error = failed(value)
+    if (error) throw new ApiError({ code: 'server-error', status: 500, message: error })
+    if (done(value)) return value
+  }
+  throw new ApiError({ code: 'timeout', status: 408, message: 'This is taking too long. Try again in a moment.' })
+}
+
+// ---------------------------------------------------------------------------
 // Service implementation
 // ---------------------------------------------------------------------------
 
@@ -168,15 +194,22 @@ export const apiExamService: ExamService = {
     return items.map(mapAttemptSummaryToAttempt)
   },
 
-  async createExam(setup): Promise<PracticeExam> {
+  async createExam(setup, onProgress): Promise<PracticeExam> {
     const createBody: ExamCreateRequestDto = {
       courseId: setup.courseId,
       topicIds: setup.topicIds,
       questionCount: setup.questionCount,
       timeLimitSeconds: setup.timeLimit * 60,
     }
-    const examResponse = await apiClient.post<ExamDto>('/api/exams', createBody)
-    const examDto = examResponse.data
+    const created = (await apiClient.post<ExamDto & ExamGenerationState>('/api/exams', createBody)).data
+    // The questions are written before the clock starts, so model latency never uses exam time.
+    const examDto = await waitFor(
+      async () => (await apiClient.get<ExamDto & ExamGenerationState>(`/api/exams/${created.id}`)).data,
+      (dto) => dto.status === 'ready',
+      (dto) => (dto.status === 'failed' ? dto.error || 'The exam could not be prepared.' : undefined),
+      (dto) => ({ progress: dto.progress ?? 0, stage: dto.stage ?? undefined }),
+      onProgress,
+    )
 
     const startResponse = await apiClient.post<ExamAttemptStartResponseDto>(`/api/exams/${examDto.id}/start`)
     const attemptDto = startResponse.data
@@ -221,12 +254,17 @@ export const apiExamService: ExamService = {
     }
   },
 
-  async getResult(id: string): Promise<ExamResult | undefined> {
-    // id is the attempt id
+  async getResult(id: string, onProgress?: (progress: ExamProgress) => void): Promise<ExamResult | undefined> {
+    // id is the attempt id; the analysis is ready once the worker has graded every answer.
     let analysisDto: ExamAnalysisDto
     try {
-      const r = await apiClient.get<ExamAnalysisDto>(`/api/exam-attempts/${id}/analysis`)
-      analysisDto = r.data
+      analysisDto = await waitFor(
+        async () => (await apiClient.get<ExamAnalysisDto & GradingState>(`/api/exam-attempts/${id}/analysis`)).data,
+        (dto) => dto.status === undefined || dto.status === 'graded',
+        (dto) => (dto.status === 'failed' ? 'Your answers could not be graded (the AI model was unavailable).' : undefined),
+        (dto) => ({ progress: dto.progress ?? 0, stage: dto.status === 'graded' ? undefined : `Grading your answers… ${Math.round((dto.progress ?? 0) * 100)}%` }),
+        onProgress,
+      )
     } catch (err) {
       if (err instanceof ApiError && err.code === 'not-found') return undefined
       throw err

@@ -8,6 +8,7 @@ import { useExamController } from '../features/exams/useExamController'
 import { examService } from '../services/api-client'
 import type { ExamQuestion, PracticeExam } from '../services/contracts/exams'
 import { classifyAiError } from '../services/ai-error'
+import { getDataMode } from '../services/service-mode'
 
 export function ActiveExamPage() {
   const { examId } = useParams()
@@ -19,7 +20,7 @@ export function ActiveExamPage() {
     void examService.getExam(examId).then((result) => { setExam(result); setLoading(false) }).catch(() => { setError('This practice exam could not be loaded. Return to the exams library and start another one.'); setLoading(false) })
   }, [examId])
   if (loading) return <LoadingState label="Preparing your practice exam" />
-  if (!exam) return <EmptyState title={error ? 'Practice exam unavailable' : 'This practice exam is not available'} text={error || 'Create a new mock exam to continue studying.'} action={<Link className="button button-secondary" to="/exams">Back to exams</Link>} />
+  if (!exam) return <EmptyState title={error ? 'Practice exam unavailable' : 'This practice exam is not available'} text={error || 'It may already have been submitted (for example when the time ran out). Its feedback is under results.'} action={<span className="empty-state-actions"><Link className="button button-secondary" to={`/exams/${examId}/results`}>See results</Link> <Link className="button button-ghost" to="/exams">Back to exams</Link></span>} />
   return <ActiveExamWorkspace exam={exam} />
 }
 
@@ -32,6 +33,7 @@ function ActiveExamWorkspace({ exam }: { exam: PracticeExam }) {
   const [submitError, setSubmitError] = useState('')
   const attemptId = exam.attemptId ?? exam.id
   const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoSubmitStarted = useRef(false)
 
   const { currentQuestion, currentIndex, answers, flagged, formatTime, remainingSeconds, answeredCount, answerQuestion, toggleFlag, goTo, isFirst, isLast } = controller
 
@@ -90,6 +92,15 @@ function ActiveExamWorkspace({ exam }: { exam: PracticeExam }) {
     }
   }
 
+  // The server auto-submits at the deadline too; this makes the page follow immediately.
+  useEffect(() => {
+    if (remainingSeconds <= 0 && !submitted && !submitting && !autoSubmitStarted.current) {
+      autoSubmitStarted.current = true
+      void submitExam()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingSeconds, submitted, submitting])
+
   if (!currentQuestion) return <EmptyState title="This exam has no questions" text="Return to the exams library and create another practice exam." />
   if (submitted) return <ExamSubmitted exam={exam} answeredCount={answeredCount} onResults={() => navigate(`/exams/${exam.id}/results`)} />
   return <div className="active-exam-page">
@@ -109,5 +120,5 @@ function SubmitExamDialog({ exam, answeredCount, flaggedCount, onCancel, onConfi
 }
 
 function ExamSubmitted({ exam, answeredCount, onResults }: { exam: PracticeExam; answeredCount: number; onResults: () => void }) {
-  return <div className="exam-submitted"><div className="exam-submitted-icon"><Check size={24} /></div><span className="eyebrow">Exam submitted</span><h1>Your answers are recorded.</h1><p>{answeredCount} of {exam.questions.length} questions had an answer. This mock exam has no live grading or correctness feedback.</p><Button onClick={onResults}>View results summary <ChevronRight size={16} /></Button></div>
+  return <div className="exam-submitted"><div className="exam-submitted-icon"><Check size={24} /></div><span className="eyebrow">Exam submitted</span><h1>Your answers are recorded.</h1><p>{answeredCount} of {exam.questions.length} questions had an answer.{getDataMode('exams') === 'mock' ? ' This mock exam has no live grading or correctness feedback.' : ' Your answers are now being graded; the results page shows the progress.'}</p><Button onClick={onResults}>View results summary <ChevronRight size={16} /></Button></div>
 }

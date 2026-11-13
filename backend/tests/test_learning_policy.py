@@ -120,3 +120,25 @@ def test_all_required_ideas_covered_means_correct():
     # Missing ideas keep it partial.
     partial = raw.model_copy(update={"covered_ideas": ["too complex"], "gaps": ["memorizes noise"]})
     assert _consistent(partial, False, rubric).verdict == "partially_correct"
+
+
+def test_gaps_outside_the_rubric_do_not_lower_the_grade():
+    """Seen in an exam with llama3.1:8b: both required ideas covered, but 'partially correct' because of
+    'bias-variance trade-off' and 'regularization techniques', which the rubric never asked for."""
+    from app.ai.agents.assessment import AnswerEvaluation
+    from app.modules.study.service import _consistent
+
+    rubric = {"required_ideas": ["overfitting is related to noise in the training set",
+                                 "low training error but high test error"]}
+    raw = AnswerEvaluation(verdict="partially_correct", confidence="medium", strengths=["Clear definition"],
+                           covered_ideas=["noise in the training set"],
+                           gaps=["bias-variance trade-off", "regularization techniques"])
+    ev = _consistent(raw, False, rubric)
+    assert (ev.verdict, ev.gaps) == ("correct", [])
+    # A real rubric gap is kept and keeps the answer partial.
+    real = raw.model_copy(update={"gaps": ["bias-variance trade-off", "high test error on new data"]})
+    ev = _consistent(real, False, rubric)
+    assert (ev.verdict, ev.gaps) == ("partially_correct", ["high test error on new data"])
+    # An incorrect answer is not upgraded just because its gaps were phrased off-rubric.
+    wrong = raw.model_copy(update={"verdict": "incorrect"})
+    assert _consistent(wrong, False, rubric).verdict == "incorrect"

@@ -183,6 +183,9 @@ def retrieval_queries(content: str, history: list[HistoryTurn]) -> list[str]:
 
 async def prepare_turn(db: AsyncSession, user: User, conversation_id: str, content: str) -> TurnPlan:
     conv = await _owned_conversation(db, user.id, conversation_id)
+    from app.modules.exams.service import ensure_no_active_exam  # local: exams depend on courses/study
+
+    await ensure_no_active_exam(db, user.id, conv.course_id)
     started = _generating.get(user.id)
     if started is not None and time.monotonic() - started < _GENERATION_TTL_S:
         raise ConflictError("StudyMate is still answering your previous message.")

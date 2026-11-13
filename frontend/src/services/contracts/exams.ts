@@ -82,12 +82,17 @@ export type PracticeExam = ExamSetup & {
   deadlineAt?: string
 }
 
+/** Progress of background work (question writing before the exam, grading after it). */
+export type ExamProgress = { progress: number; stage?: string }
+
 export interface ExamService {
   getOptions(): Promise<ExamCourseOption[]>
   listAttempts(): Promise<ExamAttempt[]>
-  createExam(setup: ExamSetup): Promise<PracticeExam>
+  /** api mode: waits until the questions are written, then starts the timer. */
+  createExam(setup: ExamSetup, onProgress?: (progress: ExamProgress) => void): Promise<PracticeExam>
   getExam(id: string): Promise<PracticeExam | undefined>
-  getResult(id: string): Promise<ExamResult | undefined>
+  /** api mode: waits while the submitted answers are being graded. */
+  getResult(id: string, onProgress?: (progress: ExamProgress) => void): Promise<ExamResult | undefined>
   /** Optional: save a single answer to the server */
   saveAnswer?(attemptId: string, questionId: string, answer: string, flagged: boolean): Promise<void>
   /** Optional: submit the attempt to the server; rejects with code 'conflict' if already submitted */
